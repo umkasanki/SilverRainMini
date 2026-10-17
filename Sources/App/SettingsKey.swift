@@ -2,4 +2,5 @@
 enum SettingsKey {
     static let volume = "volume"
     static let isMuted = "isMuted"
+    static let panelSurface = "panelSurface"
 }
