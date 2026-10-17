@@ -1,0 +1,45 @@
+name: SilverRainMini
+
+options:
+  bundleIdPrefix: local.oleg
+  deploymentTarget:
+    macOS: "26.0"
+  developmentLanguage: ru
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+
+targets:
+  SilverRainMini:
+    type: application
+    platform: macOS
+    sources:
+      - Sources
+    info:
+      path: Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Silver Rain Mini
+        CFBundleName: Silver Rain Mini
+        CFBundleDevelopmentRegion: ru
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.music
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSUIElement: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.oleg.SilverRainMini
+        PRODUCT_NAME: Silver Rain Mini
+        PRODUCT_MODULE_NAME: SilverRainMini
+        GENERATE_INFOPLIST_FILE: NO
