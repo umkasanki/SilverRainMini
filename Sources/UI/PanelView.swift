@@ -31,7 +31,8 @@ struct PanelView: View {
     }
 
     private var nowPlaying: some View {
-        HStack {
+        HStack(spacing: 13) {
+            StationArtwork()
             VStack(alignment: .leading, spacing: 2) {
                 Text("Серебряный Дождь")
                     .font(.headline)

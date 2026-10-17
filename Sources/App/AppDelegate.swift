@@ -43,6 +43,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #if DEBUG
     /// Lets a check run without a mouse: `open … --args -SRMDebugAction settings|panel|play`.
     private func performDebugAction() {
+        if let folder = UserDefaults.standard.string(forKey: "SRMDebugRenderIcons") {
+            DebugIconRenderer.render(to: URL(filePath: folder))
+            NSApp.terminate(nil)
+        }
         guard let action = UserDefaults.standard.string(forKey: "SRMDebugAction") else { return }
         // The status item gets its place in the menu bar only after launch.
         Task { @MainActor in

@@ -12,6 +12,7 @@ final class StatusItemController: NSObject {
     private let openSettings: () -> Void
     private var panel: PanelWindow?
     private var outsideClickMonitor: Any?
+    private var stateObservation: Task<Void, Never>?
 
     init(appState: AppState, openSettings: @escaping () -> Void) {
         self.appState = appState
@@ -19,6 +20,7 @@ final class StatusItemController: NSObject {
         super.init()
         configureButton()
         configureMenu()
+        observePlayerState()
     }
 
     var isPanelShown: Bool { panel?.isVisible ?? false }
@@ -31,10 +33,7 @@ final class StatusItemController: NSObject {
 
     private func configureButton() {
         guard let button = statusItem.button else { return }
-        // Placeholder until the station logo arrives (SPEC, step S4).
-        // 10 % above the default 13 pt: next to the other icons the cloud looked small.
-        button.image = NSImage(systemSymbolName: "cloud.fill", accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 14.3, weight: .regular))
+        MenuBarIcon.apply(appState.player.state, to: button)
         button.setAccessibilityLabel("Серебряный Дождь")
         button.target = self
         button.action = #selector(buttonPressed(_:))
@@ -45,6 +44,17 @@ final class StatusItemController: NSObject {
         let event = NSApp.currentEvent
         let wantsMenu = event?.type == .rightMouseDown || event?.modifierFlags.contains(.control) == true
         wantsMenu ? showMenu() : togglePanel()
+    }
+
+    /// Redraws the icon whenever the player changes state.
+    private func observePlayerState() {
+        let player = appState.player
+        stateObservation = Task { [weak self] in
+            for await state in Observations({ player.state }) {
+                guard let button = self?.statusItem.button else { return }
+                MenuBarIcon.apply(state, to: button)
+            }
+        }
     }
 
     // MARK: - Menu
