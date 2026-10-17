@@ -30,7 +30,7 @@ final class StatusItemController: NSObject {
     private func configureButton() {
         guard let button = statusItem.button else { return }
         // Placeholder until the station logo arrives (SPEC, step S4).
-        button.image = NSImage(systemSymbolName: "cloud.rain", accessibilityDescription: nil)
+        button.image = NSImage(systemSymbolName: "cloud.fill", accessibilityDescription: nil)
         button.setAccessibilityLabel("Серебряный Дождь")
         button.target = self
         button.action = #selector(buttonPressed(_:))
