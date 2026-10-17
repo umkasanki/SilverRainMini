@@ -276,9 +276,13 @@ silver.ru и на исходный код на GitHub, пометка «Неоф
 | Вид | Материал панели | `Picker`: 8 вариантов (FR-6) | `panelSurface` | «Материал ультратонкий» |
 
 **Автозагрузка** (`LoginItem`, PLAN 8.4): переключатель показывает реальный
-`SMAppService.mainApp.status`, перечитывает его при каждом открытии окна. При
-`.requiresApproval` — подпись «Разрешите в Системных настройках → Объекты входа»
-и кнопка «Открыть настройки», вызывающая `SMAppService.openSystemSettingsLoginItems()`.
+`SMAppService.mainApp.status`, перечитывает его при каждом открытии окна и каждый
+раз, когда приложение снова становится активным — так видно и изменение, сделанное
+в Системных настройках. При `.requiresApproval` переключатель включён (пользователь
+просил), под ним подпись «Разрешите в Системных настройках → Объекты входа» и кнопка
+«Открыть настройки», вызывающая `SMAppService.openSystemSettingsLoginItems()`. Если
+система отказала — под переключателем «Не удалось включить автозагрузку», а сам он
+показывает то, что есть на самом деле.
 
 **«Проверить»** (`StreamProbe`): GET с таймаутом 5 с, читаются только заголовки,
 соединение закрывается. Результат под полем: «AAC · 96 kbps» (из `Content-Type` и
@@ -364,7 +368,7 @@ SilverRainMini/
 │   │   └── StreamProbe.swift           # кнопка «Проверить»
 │   ├── System/
 │   │   ├── NowPlayingBridge.swift      # MPNowPlayingInfoCenter + MPRemoteCommandCenter
-│   │   └── LoginItem.swift             # SMAppService.mainApp
+│   │   └── LoginItem.swift             # SMAppService.mainApp за протоколом, для тестов
 │   ├── MenuBar/
 │   │   ├── StatusItemController.swift  # NSStatusItem, левый/правый клик, меню
 │   │   ├── PanelWindow.swift           # NSPanel под значком, закрытие по клику мимо
@@ -389,6 +393,7 @@ SilverRainMini/
     ├── VolumeSliderTests.swift
     ├── VolumeTests.swift
     ├── FakePlaybackEngine.swift
+    ├── LoginItemTests.swift
     ├── ManualClock.swift               # сны, которые кончаются, когда скажет тест
     ├── PlaybackFailureTests.swift
     ├── ReconnectPolicyTests.swift

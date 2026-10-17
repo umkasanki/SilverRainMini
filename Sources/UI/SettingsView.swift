@@ -1,7 +1,8 @@
+import AppKit
 import SwiftUI
 
 /// The «Основные» pane of the Settings window (SPEC FR-10): a grouped form, so it
-/// looks like System Settings. The login item arrives in step S7.
+/// looks like System Settings.
 struct GeneralSettingsView: View {
     @AppStorage(SettingsKey.playOnLaunch) private var playsOnLaunch = true
     @AppStorage(SettingsKey.streamID) private var streamID = StreamCatalog.bundled.defaultStream.id
@@ -19,11 +20,25 @@ struct GeneralSettingsView: View {
     @State private var probe: (address: String, outcome: StreamProbe.Outcome)?
     @State private var isProbing = false
 
+    @State private var loginItem = LoginItem()
+
     private let catalog = StreamCatalog.bundled
 
     var body: some View {
         Form {
             Section {
+                Toggle("Запускать при входе в систему", isOn: Binding(
+                    get: { loginItem.isOn },
+                    set: { loginItem.setOn($0) }
+                ))
+                if loginItem.status == .needsApproval {
+                    loginItemApproval
+                }
+                if let problem = loginItem.problem {
+                    Label(problem, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                }
                 Toggle("Включать радио при запуске", isOn: $playsOnLaunch)
             }
 
@@ -52,8 +67,27 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .settingsPane()
-        .onAppear { draftAddress = customURL }
+        .onAppear {
+            draftAddress = customURL
+            loginItem.refresh()
+        }
+        // The user may have changed it in System Settings meanwhile.
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
+                loginItem.refresh()
+            }
+        }
         .onDisappear(perform: saveAddress)
+    }
+
+    private var loginItemApproval: some View {
+        HStack {
+            Text("Разрешите в Системных настройках → Объекты входа")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button("Открыть настройки", action: loginItem.openSystemSettings)
+        }
     }
 
     private var customAddress: some View {
