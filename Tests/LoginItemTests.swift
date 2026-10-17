@@ -1,3 +1,4 @@
+import AppKit
 import ServiceManagement
 import Testing
 @testable import SilverRainMini
@@ -5,22 +6,44 @@ import Testing
 /// SPEC FR-10, PLAN 8.4: the switch shows what the system says.
 @MainActor
 struct LoginItemTests {
-    private final class FakeService: LoginItemService {
-        var status: SMAppService.Status = .notRegistered
-        var failNext = false
-        private(set) var calls: [String] = []
+    /// Called from a background task by `LoginItem`, hence the lock.
+    private final class FakeService: LoginItemService, @unchecked Sendable {
+        private let lock = NSLock()
+        private var _status: SMAppService.Status = .notRegistered
+        private var _failNext = false
+        private var _calls: [String] = []
+
+        var status: SMAppService.Status {
+            get { lock.withLock { _status } }
+            set { lock.withLock { _status = newValue } }
+        }
+        var failNext: Bool {
+            get { lock.withLock { _failNext } }
+            set { lock.withLock { _failNext = newValue } }
+        }
+        var calls: [String] { lock.withLock { _calls } }
 
         func register() throws {
-            calls.append("register")
-            if failNext { throw CocoaError(.featureUnsupported) }
-            status = .enabled
+            try lock.withLock {
+                _calls.append("register")
+                if _failNext { throw CocoaError(.featureUnsupported) }
+                _status = .enabled
+            }
         }
 
         func unregister() throws {
-            calls.append("unregister")
-            if failNext { throw CocoaError(.featureUnsupported) }
-            status = .notRegistered
+            try lock.withLock {
+                _calls.append("unregister")
+                if _failNext { throw CocoaError(.featureUnsupported) }
+                _status = .notRegistered
+            }
         }
+    }
+
+    private func item(_ service: FakeService) -> LoginItem {
+        let item = LoginItem(service: service)
+        item.refresh()
+        return item
     }
 
     @Test(arguments: [
@@ -32,44 +55,58 @@ struct LoginItemTests {
     func showsWhatTheSystemSays(system: SMAppService.Status, shown: LoginItem.Status) {
         let service = FakeService()
         service.status = system
-        #expect(LoginItem(service: service).status == shown)
+        #expect(item(service).status == shown)
     }
 
     @Test func waitingForApprovalStillReadsAsOn() {
         let service = FakeService()
         service.status = .requiresApproval
-        #expect(LoginItem(service: service).isOn)
+        #expect(item(service).isOn)
     }
 
-    @Test func switchingOnAndOffRegistersAndUnregisters() {
+    @Test func creatingOneDoesNotAskTheSystem() {
         let service = FakeService()
-        let item = LoginItem(service: service)
-        item.setOn(true)
+        service.status = .enabled
+        #expect(LoginItem(service: service).status == .off)
+    }
+
+    @Test func switchingOnAndOffRegistersAndUnregisters() async {
+        let service = FakeService()
+        let item = item(service)
+        await item.setOn(true)
         #expect(item.status == .on)
-        item.setOn(false)
+        await item.setOn(false)
         #expect(item.status == .off)
         #expect(service.calls == ["register", "unregister"])
+        #expect(!item.isChanging)
     }
 
-    @Test func aChangeMadeInSystemSettingsShowsOnRefresh() {
+    @Test func aChangeMadeInSystemSettingsShowsWhenTheAppComesBack() {
         let service = FakeService()
-        let item = LoginItem(service: service)
-        item.setOn(true)
-        service.status = .notRegistered
-        item.refresh()
-        #expect(!item.isOn)
+        let item = item(service)
+        service.status = .enabled
+        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: NSApp)
+        #expect(item.isOn)
     }
 
-    @Test func aFailureIsExplainedAndTheSwitchStaysTrue() {
+    @Test func aFailureIsExplainedAndTheSwitchStaysTrue() async {
         let service = FakeService()
         service.failNext = true
-        let item = LoginItem(service: service)
-        item.setOn(true)
+        let item = item(service)
+        await item.setOn(true)
         #expect(item.status == .off)
         #expect(item.problem == "Не удалось включить автозагрузку")
-        service.failNext = false
-        item.setOn(true)
+    }
+
+    @Test func theErrorGoesOnceTheSystemShowsWhatWasAsked() async {
+        let service = FakeService()
+        service.failNext = true
+        let item = item(service)
+        await item.setOn(true)
+        // The user turns it on in System Settings → Login Items instead.
+        service.status = .enabled
+        item.refresh()
         #expect(item.problem == nil)
-        #expect(item.status == .on)
+        #expect(item.isOn)
     }
 }

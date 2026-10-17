@@ -23,7 +23,7 @@
 | Язык | Swift 6, строгая проверка concurrency (`SWIFT_STRICT_CONCURRENCY = complete`) |
 | UI | SwiftUI; AppKit только там, где у SwiftUI нет API (раздел 4.2) |
 | Зависимости | нет сторонних |
-| Bundle ID | `local.oleg.SilverRainMini` |
+| Bundle ID | `local.oleg.SilverRainMini`; отладочная сборка — `local.oleg.SilverRainMini.debug`: свои настройки, и автозагрузка с LaunchServices никогда не выбирают её вместо установленной |
 | Отображаемое имя | Silver Rain Mini |
 | Подпись | ad-hoc (`CODE_SIGN_IDENTITY = "-"`), без песочницы, без нотаризации |
 | Сеть | только HTTPS, исключений App Transport Security нет |
@@ -447,7 +447,7 @@ SilverRainMini/
 make app      # xcodegen generate && xcodebuild ... -configuration Release → build/Silver Rain Mini.app
 make run      # make app && open "build/Silver Rain Mini.app"
 make test     # xcodegen generate && xcodebuild test
-make install  # копирует в /Applications (нужно для стабильной автозагрузки)
+make install  # копирует в /Applications и забывает копии из build/ в LaunchServices
 make clean
 ```
 

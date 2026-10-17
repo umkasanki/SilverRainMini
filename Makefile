@@ -1,4 +1,5 @@
 PROJECT  := SilverRainMini.xcodeproj
+LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 SCHEME   := SilverRainMini
 APP_NAME := Silver Rain Mini
 DERIVED  := build/DerivedData
@@ -28,6 +29,10 @@ install: app
 	-pkill -x "$(APP_NAME)"
 	rm -rf "/Applications/$(APP_NAME).app"
 	ditto "$(APP)" "/Applications/$(APP_NAME).app"
+	# The build copies carry the same identifier; forget them so that the login
+	# item and LaunchServices find the installed app, not a build folder.
+	-$(LSREGISTER) -u "$(APP)"
+	-$(LSREGISTER) -u "$(PRODUCT)"
 
 clean:
 	rm -rf build $(PROJECT)

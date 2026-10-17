@@ -45,6 +45,11 @@ targets:
         PRODUCT_NAME: Silver Rain Mini
         PRODUCT_MODULE_NAME: SilverRainMini
         GENERATE_INFOPLIST_FILE: NO
+      configs:
+        # Debug builds are a different app to macOS: their own preferences, and
+        # never the copy that the login item or LaunchServices picks by identifier.
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: local.oleg.SilverRainMini.debug
     scheme:
       testTargets:
         - SilverRainMiniTests

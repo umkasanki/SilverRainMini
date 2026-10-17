@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// The «Основные» pane of the Settings window (SPEC FR-10): a grouped form, so it
@@ -29,8 +28,9 @@ struct GeneralSettingsView: View {
             Section {
                 Toggle("Запускать при входе в систему", isOn: Binding(
                     get: { loginItem.isOn },
-                    set: { loginItem.setOn($0) }
+                    set: { on in Task { await loginItem.setOn(on) } }
                 ))
+                .disabled(loginItem.isChanging)
                 if loginItem.status == .needsApproval {
                     loginItemApproval
                 }
@@ -70,12 +70,6 @@ struct GeneralSettingsView: View {
         .onAppear {
             draftAddress = customURL
             loginItem.refresh()
-        }
-        // The user may have changed it in System Settings meanwhile.
-        .task {
-            for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
-                loginItem.refresh()
-            }
         }
         .onDisappear(perform: saveAddress)
     }
