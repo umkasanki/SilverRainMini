@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         player: RadioPlayer(engine: AVPlayerEngine()),
         networkMonitor: NetworkMonitor(),
         sleepWatcher: SleepWatcher(),
-        streamURL: AppDelegate.streamURL
+        streamOverride: AppDelegate.streamOverride
     )
 
     private static var isHostingTests: Bool {
@@ -18,14 +18,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// In debug builds `-SRMDebugStreamURL <address>` stands in for the stream,
     /// e.g. a dead one to see the emergency path at work.
-    private static var streamURL: URL {
+    private static var streamOverride: URL? {
         #if DEBUG
-        if let address = UserDefaults.standard.string(forKey: "SRMDebugStreamURL"),
-           let url = URL(string: address) {
-            return url
-        }
+        UserDefaults.standard.string(forKey: "SRMDebugStreamURL").flatMap(URL.init(string:))
+        #else
+        nil
         #endif
-        return AppState.defaultStreamURL
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -34,6 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let opener = settingsOpener
         statusItemController = StatusItemController(appState: appState, openSettings: { opener.open() })
         Logger.app.info("Launched")
+        if appState.playsOnLaunch {
+            appState.togglePlayback()
+        }
 
         #if DEBUG
         performDebugAction()
@@ -55,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             switch action {
             case "settings": settingsOpener.open()
             case "panel": statusItemController?.togglePanel()
-            case "play": appState.togglePlayback()
+            case "play" where !appState.player.state.isActive: appState.togglePlayback()
             default: break
             }
         }

@@ -81,6 +81,13 @@ final class RadioPlayer {
         start(url)
     }
 
+    /// Shows a failure without trying to play, for an address known to be unplayable.
+    /// Does nothing unless stopped.
+    func reject(_ failure: PlaybackFailure) {
+        guard !state.isActive else { return }
+        state = .error(failure)
+    }
+
     /// Stops completely; the next `play` starts from the live edge.
     func stop() {
         cancelTasks()

@@ -16,17 +16,7 @@ struct VolumeTests {
     }
 
     private let engine = FakePlaybackEngine()
-    private let defaults: UserDefaults
-
-    /// One fixed preferences file for all runs, wiped at the start of each test.
-    /// A fresh name per test left a new file in ~/Library/Preferences every run.
-    /// The tests run on the main actor one at a time, so sharing it is safe.
-    private static let suite = "local.oleg.SilverRainMini.tests"
-
-    init() {
-        defaults = UserDefaults(suiteName: Self.suite)!
-        defaults.removePersistentDomain(forName: Self.suite)
-    }
+    private let defaults = TestDefaults.fresh()
 
     private func makeAppState() -> AppState {
         AppState(

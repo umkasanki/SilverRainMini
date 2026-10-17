@@ -3,4 +3,8 @@ enum SettingsKey {
     static let volume = "volume"
     static let isMuted = "isMuted"
     static let panelSurface = "panelSurface"
+    static let streamID = "streamId"
+    static let customURL = "customURL"
+    static let showQuality = "showQuality"
+    static let playOnLaunch = "playOnLaunch"
 }

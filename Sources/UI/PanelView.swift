@@ -9,6 +9,7 @@ struct PanelView: View {
     let collapse: () -> Void
 
     @AppStorage(SettingsKey.panelSurface) private var surface = PanelSurface.default
+    @AppStorage(SettingsKey.showQuality) private var showsQuality = false
 
     /// The width of the cards; the panel adds room for their shadow.
     static let width: CGFloat = 300
@@ -20,13 +21,18 @@ struct PanelView: View {
                     NowPlayingCard(
                         state: appState.player.state,
                         isOnFallback: appState.player.isOnFallback,
-                        streamTitle: appState.streamTitle,
+                        streamTitle: appState.stream.shortTitle,
                         togglePlayback: appState.togglePlayback
                     )
                     .panelSurface(surface, in: .rect(cornerRadius: 20))
 
                     soundCard
                         .panelSurface(surface, in: .rect(cornerRadius: 20))
+
+                    if showsQuality {
+                        qualityRow
+                            .panelSurface(surface, in: .rect(cornerRadius: 20))
+                    }
                 }
             }
 
@@ -43,6 +49,40 @@ struct PanelView: View {
         }
         .frame(width: Self.width)
         .padding(10)
+    }
+
+    /// Hidden unless switched on in Settings: the bitrate changes twice a year, and
+    /// the choice always lives in Settings anyway (PLAN 6.2).
+    private var qualityRow: some View {
+        Menu {
+            Picker("Качество", selection: Binding(
+                get: { appState.selectedStreamID },
+                set: { appState.selectStream(id: $0) }
+            )) {
+                ForEach(appState.stationStreams) { stream in
+                    Text(stream.title).tag(stream.id)
+                }
+                if appState.selectedStreamID == StreamCatalog.customID {
+                    Text("Свой адрес").tag(StreamCatalog.customID)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack {
+                Text("Качество · \(appState.stream.shortTitle)")
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .font(.system(size: 13))
+            .padding(.vertical, 11)
+            .padding(.horizontal, 14)
+            .contentShape(.rect)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
     }
 
     private var soundCard: some View {

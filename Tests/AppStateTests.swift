@@ -29,7 +29,8 @@ struct AppStateTests {
         AppState(
             player: RadioPlayer(engine: engine, sleep: clock.sleep),
             networkMonitor: network,
-            sleepWatcher: sleep
+            sleepWatcher: sleep,
+            defaults: TestDefaults.fresh()
         )
     }
 

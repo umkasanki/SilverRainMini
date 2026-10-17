@@ -1,0 +1,5 @@
+[
+  { "id": "aac96",  "title": "Высокое · AAC 96",  "shortTitle": "AAC 96",  "url": "https://silverrain.hostingradio.ru/silver64.aac",  "default": true },
+  { "id": "mp3128", "title": "Стандарт · MP3 128", "shortTitle": "MP3 128", "url": "https://silverrain.hostingradio.ru/silver128.mp3" },
+  { "id": "aac48",  "title": "Эконом · AAC 48",   "shortTitle": "AAC 48",  "url": "https://silverrain.hostingradio.ru/silver48.aac" }
+]

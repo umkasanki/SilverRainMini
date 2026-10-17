@@ -8,10 +8,8 @@ import os
 final class AppState {
     let player: RadioPlayer
 
-    /// Fixed until the stream catalog arrives in step S6.
-    let streamURL: URL
-    /// The short name of the stream for the interface; fixed until step S6.
-    let streamTitle = "AAC 96"
+    /// What the settings say to play; follows them as they change (SPEC FR-9).
+    private(set) var stream: PlayableStream
 
     /// 0…1, remembered between launches (SPEC FR-8).
     private(set) var volume: Double
@@ -22,23 +20,28 @@ final class AppState {
     @ObservationIgnored private let sleepWatcher: any SleepWatching
     @ObservationIgnored private let playlistResolver = PlaylistResolver()
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let catalog: StreamCatalog
+    /// Debug builds may force a stream; see `AppDelegate`.
+    @ObservationIgnored private let streamOverride: URL?
+    @ObservationIgnored private var settingsObserver: (any NSObjectProtocol)?
     /// Whether the player was busy when the Mac went to sleep; lives in memory only.
     @ObservationIgnored private var wasActiveBeforeSleep = false
-
-    static let defaultStreamURL = URL(string: "https://silverrain.hostingradio.ru/silver64.aac")!
 
     init(
         player: RadioPlayer,
         networkMonitor: any NetworkMonitoring,
         sleepWatcher: any SleepWatching,
-        streamURL: URL = AppState.defaultStreamURL,
-        defaults: UserDefaults = .standard
+        catalog: StreamCatalog = .bundled,
+        defaults: UserDefaults = .standard,
+        streamOverride: URL? = nil
     ) {
         self.player = player
         self.networkMonitor = networkMonitor
         self.sleepWatcher = sleepWatcher
-        self.streamURL = streamURL
+        self.catalog = catalog
         self.defaults = defaults
+        self.streamOverride = streamOverride
+        stream = Self.stream(in: catalog, defaults: defaults, override: streamOverride)
         volume = (defaults.object(forKey: SettingsKey.volume) as? Double).map { min(max($0, 0), 1) } ?? 1
         isMuted = defaults.bool(forKey: SettingsKey.isMuted)
         applyVolume()
@@ -49,6 +52,53 @@ final class AppState {
         }
         sleepWatcher.onSleep = { [weak self] in self?.prepareForSleep() }
         sleepWatcher.onWake = { [weak self] in self?.resumeAfterSleep() }
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: defaults, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.settingsChanged() }
+        }
+    }
+
+    /// The «Включать радио при запуске» setting; on unless turned off (SPEC FR-10).
+    var playsOnLaunch: Bool {
+        // `bool(forKey:)` also understands "NO" from the command line, which `as? Bool` does not.
+        defaults.object(forKey: SettingsKey.playOnLaunch) == nil || defaults.bool(forKey: SettingsKey.playOnLaunch)
+    }
+
+    // MARK: - Stream
+
+    /// The station's streams, for the quality menu in the panel.
+    var stationStreams: [RadioStream] { catalog.streams }
+
+    /// The `streamId` setting as it stands, unknown ids included.
+    var selectedStreamID: String {
+        defaults.string(forKey: SettingsKey.streamID) ?? catalog.defaultStream.id
+    }
+
+    func selectStream(id: String) {
+        defaults.set(id, forKey: SettingsKey.streamID)
+    }
+
+    /// Switching quality while playing starts the new stream at once (SPEC FR-9);
+    /// stopped, it is only remembered.
+    private func settingsChanged() {
+        let latest = Self.stream(in: catalog, defaults: defaults, override: streamOverride)
+        guard latest != stream else { return }
+        stream = latest
+        if player.state.isActive {
+            player.stop()
+            play()
+        }
+    }
+
+    private static func stream(in catalog: StreamCatalog, defaults: UserDefaults, override: URL?) -> PlayableStream {
+        if let override {
+            return PlayableStream(url: override, shortTitle: "отладка", allowsFallback: true)
+        }
+        return catalog.playable(
+            streamID: defaults.string(forKey: SettingsKey.streamID) ?? catalog.defaultStream.id,
+            customAddress: defaults.string(forKey: SettingsKey.customURL) ?? ""
+        )
     }
 
     /// ▶︎ or ⏸: starts the live stream, or stops whatever the player is doing.
@@ -96,8 +146,16 @@ final class AppState {
     // MARK: - Playback
 
     private func play() {
-        let resolver = playlistResolver
-        player.play(streamURL, fallback: { try await resolver.resolve() })
+        guard let url = stream.url else {
+            player.reject(.invalidAddress)
+            return
+        }
+        var fallback: RadioPlayer.Fallback?
+        if stream.allowsFallback {
+            let resolver = playlistResolver
+            fallback = { try await resolver.resolve() }
+        }
+        player.play(url, fallback: fallback)
     }
 
     // MARK: - Sleep

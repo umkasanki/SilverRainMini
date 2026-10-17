@@ -234,7 +234,12 @@ enum PlaybackState: Equatable {
 - Выбор хранится в `streamId`; значение `custom` означает «Свой адрес».
 - Неизвестный сохранённый `streamId` → поток по умолчанию.
 - Смена потока во время игры: новый `AVPlayerItem`, пауза ≤ 2 с, состояние
-  проходит через `connecting`. В `idle` — только запоминается.
+  проходит через `connecting`. В `idle` — только запоминается. `AppState` следит за
+  настройками (`UserDefaults.didChangeNotification`) и перезапускает эфир, только
+  если изменился сам поток, а не любая настройка.
+- «Свой адрес»: пробелы обрезаются, без схемы подставляется `https://`, `http://`
+  отклоняется («Нужен адрес https://»). Неверный адрес даёт «Не удалось подключиться»
+  сразу, без попытки играть. Аварийного пути у своего адреса нет.
 
 КП **[тест]**: загрузка каталога; поток по умолчанию; неизвестный id; свой адрес
 пустой, без схемы, `http://`, корректный.
@@ -260,7 +265,11 @@ enum PlaybackState: Equatable {
 
 **«Проверить»** (`StreamProbe`): GET с таймаутом 5 с, читаются только заголовки,
 соединение закрывается. Результат под полем: «AAC · 96 kbps» (из `Content-Type` и
-`icy-br`), либо «Нужен адрес https://», либо текст ошибки.
+`icy-br`), либо «Нужен адрес https://», «Сервер ответил: 404», «Это не аудиопоток»,
+«Не удалось подключиться». Проверено на настоящих адресах: ответ около 1 с.
+
+**Поле «Адрес»** сохраняется по Return или «Проверить», а не на каждую букву:
+пока играет свой поток, каждое сохранение переключает эфир на новый адрес.
 
 **Включать радио при запуске:** если включено, при старте приложения сразу
 вызывается `play()`. Вместе с автозагрузкой это и есть «включил Mac — слушаешь».
@@ -327,7 +336,7 @@ SilverRainMini/
 │   │   ├── NetworkMonitor.swift        # NWPathMonitor
 │   │   └── SleepWatcher.swift          # сон и пробуждение
 │   ├── Streams/
-│   │   ├── RadioStream.swift           # модель
+│   │   ├── RadioStream.swift           # модель потока станции и PlayableStream
 │   │   ├── StreamCatalog.swift         # streams.json + свой адрес + выбор
 │   │   ├── PlaylistResolver.swift      # аварийный путь через 48.m3u
 │   │   └── StreamProbe.swift           # кнопка «Проверить»
@@ -361,6 +370,9 @@ SilverRainMini/
     ├── PlaybackFailureTests.swift
     ├── ReconnectPolicyTests.swift
     ├── StreamCatalogTests.swift
+    ├── StreamProbeTests.swift
+    ├── StreamSwitchingTests.swift
+    ├── TestDefaults.swift              # один общий тестовый файл настроек
     ├── PlaylistResolverTests.swift
     ├── RadioPlayerStateTests.swift
     └── RadioPlayerReconnectTests.swift
