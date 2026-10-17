@@ -25,6 +25,17 @@ final class SettingsOpener {
         }
         NSApp.activate()
         action()
+        // Since macOS 14 the system may refuse to activate an app in the background,
+        // and the window would open behind the others, so it is raised explicitly.
+        Task { @MainActor in
+            await Task.yield()
+            settingsWindow?.orderFrontRegardless()
+        }
+    }
+
+    /// The only titled window this app has.
+    private var settingsWindow: NSWindow? {
+        NSApp.windows.first { $0.isVisible && $0.styleMask.contains(.titled) }
     }
 }
 
