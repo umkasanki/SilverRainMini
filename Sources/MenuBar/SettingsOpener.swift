@@ -9,27 +9,38 @@ import os
 /// keeps the action at hand.
 @MainActor
 final class SettingsOpener {
-    private var action: OpenSettingsAction?
+    /// Filled in by the hidden view once SwiftUI hands it the action.
+    private final class ActionBox {
+        var action: OpenSettingsAction?
+    }
+
+    private let box: ActionBox
     private let hostingView: NSHostingView<SettingsActionReader>
 
     init() {
-        hostingView = NSHostingView(rootView: SettingsActionReader(onRead: { _ in }))
-        hostingView.rootView = SettingsActionReader(onRead: { [weak self] in self?.action = $0 })
+        let box = ActionBox()
+        self.box = box
+        hostingView = NSHostingView(rootView: SettingsActionReader { box.action = $0 })
         hostingView.layoutSubtreeIfNeeded()
     }
 
     func open() {
-        guard let action else {
+        guard let action = box.action else {
             Logger.app.error("Settings action is not available")
             return
         }
-        NSApp.activate()
+        // `NSApp.activate()`, which Apple recommends, leaves a menu bar app inactive
+        // even after a click on its own menu (measured 17.10.2026, macOS 26.3): the
+        // window opens behind the others and typing goes elsewhere. The older call,
+        // marked "to be deprecated", still activates. Recorded in the PLAN decision log.
+        NSApp.activate(ignoringOtherApps: true)
         action()
-        // Since macOS 14 the system may refuse to activate an app in the background,
-        // and the window would open behind the others, so it is raised explicitly.
         Task { @MainActor in
             await Task.yield()
-            settingsWindow?.orderFrontRegardless()
+            guard let window = settingsWindow else { return }
+            window.orderFrontRegardless()
+            window.makeKey()
+            Logger.app.notice("Settings opened; app active: \(NSApp.isActive), window key: \(window.isKeyWindow)")
         }
     }
 

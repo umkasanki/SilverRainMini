@@ -27,11 +27,15 @@ struct PlaylistResolverTests {
 
     @Test func resolveReadsTheStationPlaylist() async throws {
         var resolver = PlaylistResolver()
-        resolver.fetch = { url in
-            #expect(url == PlaylistResolver.stationPlaylist)
+        resolver.fetch = { request in
+            #expect(request.url == PlaylistResolver.stationPlaylist)
             return Data("http://silverrain.hostingradio.ru/silver128.mp3\n".utf8)
         }
         #expect(try await resolver.resolve() == stream)
+    }
+
+    @Test func playlistIsNeverTakenFromTheCache() {
+        #expect(PlaylistResolver.request.cachePolicy == .reloadIgnoringLocalCacheData)
     }
 
     @Test func resolveFailsOnAnEmptyPlaylist() async {

@@ -5,12 +5,16 @@ import os
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController?
     private let settingsOpener = SettingsOpener()
-    private let appState = AppState(
+    private lazy var appState = AppState(
         player: RadioPlayer(engine: AVPlayerEngine()),
         networkMonitor: NetworkMonitor(),
         sleepWatcher: SleepWatcher(),
         streamURL: AppDelegate.streamURL
     )
+
+    private static var isHostingTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
 
     /// In debug builds `-SRMDebugStreamURL <address>` stands in for the stream,
     /// e.g. a dead one to see the emergency path at work.
@@ -25,6 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Unit tests run inside the app: they need its code, not its icon or its sound.
+        guard !Self.isHostingTests else { return }
         let opener = settingsOpener
         statusItemController = StatusItemController(appState: appState, openSettings: { opener.open() })
         Logger.app.info("Launched")

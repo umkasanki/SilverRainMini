@@ -95,7 +95,8 @@ final class RadioPlayer {
             // Sound is back after a stall.
             stallTask?.cancel()
             stallTask = nil
-        case (.stalled, .playing):
+        case (.stalled, .playing) where stallTask == nil:
+            // A second report of the same stall must not restart the clock.
             stallTask = after(stallTimeout) { $0.stalledTooLong() }
         case (.failed(let failure), .connecting), (.failed(let failure), .playing),
              (.failed(let failure), .reconnecting):

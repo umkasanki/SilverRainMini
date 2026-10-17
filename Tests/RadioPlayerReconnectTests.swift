@@ -121,6 +121,20 @@ struct RadioPlayerReconnectTests {
         #expect(player.state == .playing)
     }
 
+    @Test func repeatedStallReportDoesNotRestartTheClock() async {
+        let player = playing(makePlayer())
+        engine.send(.stalled)
+        await settle { clock.pending.contains(.seconds(10)) }
+        engine.send(.stalled)
+        await settle()
+        engine.send(.started)
+        await settle { !clock.pending.contains(.seconds(10)) }
+        clock.fire(.seconds(10))
+        await settle()
+        #expect(player.state == .playing)
+        #expect(clock.requested.filter { $0 == .seconds(10) }.count == 1)
+    }
+
     // MARK: - Emergency path
 
     private var fallback: RadioPlayer.Fallback {

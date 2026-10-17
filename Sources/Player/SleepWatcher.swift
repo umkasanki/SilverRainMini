@@ -1,9 +1,16 @@
 import AppKit
 import os
 
+/// What `AppState` needs to know about sleep; tests stand in for it.
+@MainActor
+protocol SleepWatching: AnyObject {
+    var onSleep: (() -> Void)? { get set }
+    var onWake: (() -> Void)? { get set }
+}
+
 /// Tells when the Mac is about to sleep and when it has woken (SPEC FR-5).
 @MainActor
-final class SleepWatcher {
+final class SleepWatcher: SleepWatching {
     var onSleep: (() -> Void)?
     var onWake: (() -> Void)?
 

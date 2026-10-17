@@ -10,13 +10,21 @@ struct PlaylistResolver: Sendable {
     static let stationPlaylist = URL(string: "https://silver.ru/radio/48.m3u")!
 
     /// Downloads a playlist; tests replace it.
-    var fetch: @Sendable (URL) async throws -> Data = { url in
-        try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 10)).0
+    var fetch: @Sendable (URLRequest) async throws -> Data = { request in
+        try await URLSession.shared.data(for: request).0
     }
+
+    /// Asks the station every time: a cached copy would defeat the point of
+    /// following the playlist when the station moves its stream.
+    static let request = URLRequest(
+        url: stationPlaylist,
+        cachePolicy: .reloadIgnoringLocalCacheData,
+        timeoutInterval: 10
+    )
 
     /// The stream the station's playlist points at today.
     func resolve() async throws -> URL {
-        let data = try await fetch(Self.stationPlaylist)
+        let data = try await fetch(Self.request)
         guard let url = Self.streamURL(inPlaylist: String(decoding: data, as: UTF8.self)) else {
             throw Failure.noStreamInPlaylist
         }

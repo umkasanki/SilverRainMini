@@ -81,6 +81,7 @@ final class StatusItemController: NSObject {
         self.panel = panel
         panel.show(below: button)
         button.highlight(true)
+        removeOutsideClickMonitor()
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown]
         ) { [weak self] _ in
@@ -89,15 +90,18 @@ final class StatusItemController: NSObject {
         Logger.menuBar.debug("Panel shown")
     }
 
+    /// Cleans up fully even if the system has already hidden the panel.
     private func closePanel() {
-        guard let panel, panel.isVisible else { return }
-        panel.orderOut(nil)
+        panel?.orderOut(nil)
         statusItem.button?.highlight(false)
+        removeOutsideClickMonitor()
+    }
+
+    private func removeOutsideClickMonitor() {
         if let outsideClickMonitor {
             NSEvent.removeMonitor(outsideClickMonitor)
         }
         outsideClickMonitor = nil
-        Logger.menuBar.debug("Panel closed")
     }
 
     private func makePanel() -> PanelWindow {
