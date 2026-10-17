@@ -8,5 +8,7 @@ struct SilverRainMiniApp: App {
         Settings {
             SettingsView()
         }
+        // HIG, Settings: the window takes the size of its content, so nobody needs to resize it.
+        .windowResizability(.contentSize)
     }
 }

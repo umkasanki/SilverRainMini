@@ -7,4 +7,5 @@ enum SettingsKey {
     static let customURL = "customURL"
     static let showQuality = "showQuality"
     static let playOnLaunch = "playOnLaunch"
+    static let settingsPane = "settingsPane"
 }

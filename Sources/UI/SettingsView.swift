@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The Settings window (SPEC FR-10): a grouped form, so it looks like System
-/// Settings. The login item arrives in step S7.
-struct SettingsView: View {
+/// The «Основные» pane of the Settings window (SPEC FR-10): a grouped form, so it
+/// looks like System Settings. The login item arrives in step S7.
+struct GeneralSettingsView: View {
     @AppStorage(SettingsKey.playOnLaunch) private var playsOnLaunch = true
     @AppStorage(SettingsKey.streamID) private var streamID = StreamCatalog.bundled.defaultStream.id
     @AppStorage(SettingsKey.customURL) private var customURL = ""
@@ -45,11 +45,9 @@ struct SettingsView: View {
                 }
             }
 
-            Section {
-                LabeledContent("Версия", value: Self.version)
-            }
         }
         .formStyle(.grouped)
+        .settingsPane()
         .onAppear { draftAddress = customURL }
     }
 
@@ -95,8 +93,59 @@ struct SettingsView: View {
             isProbing = false
         }
     }
+}
 
-    private static var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+/// The Settings window: two panes. The window takes each pane's size, shows its
+/// name as the title and reopens on the pane last seen (HIG, Settings).
+///
+/// The panes are switched by a segmented control rather than the toolbar the HIG
+/// describes: the user wanted words only, and the settings toolbar keeps an empty
+/// square above each word when the symbols are removed (seen on screen, 17.10.2026).
+struct SettingsView: View {
+    private enum Pane: String, CaseIterable {
+        case general, about
+
+        var title: String {
+            switch self {
+            case .general: "Основные"
+            case .about: "О программе"
+            }
+        }
+    }
+
+    @AppStorage(SettingsKey.settingsPane) private var pane = Pane.general
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("Раздел", selection: $pane) {
+                ForEach(Pane.allCases, id: \.self) { pane in
+                    Text(pane.title).tag(pane)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .padding(.top, 14)
+
+            switch pane {
+            case .general: GeneralSettingsView()
+            case .about: AboutView()
+            }
+        }
+        .navigationTitle(pane.title)
+    }
+}
+
+extension View {
+    /// The common frame of a settings pane. A grouped form has no width of its own;
+    /// this one fits the longest label and menu. The height follows the content,
+    /// and so does the window, so there is nothing to scroll. The margins are wider
+    /// than the form's own: at the default they looked cramped (17.10.2026).
+    func settingsPane() -> some View {
+        frame(width: 480)
+            .contentMargins(.horizontal, 12, for: .scrollContent)
+            .contentMargins(.vertical, 10, for: .scrollContent)
+            .fixedSize(horizontal: false, vertical: true)
+            .scrollDisabled(true)
     }
 }
