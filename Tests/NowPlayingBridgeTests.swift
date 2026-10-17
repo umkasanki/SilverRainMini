@@ -31,7 +31,8 @@ struct NowPlayingBridgeTests {
 }
 
 extension SettingsTests {
-    /// SPEC FR-11: the remote commands, on a real AppState with a fake engine.
+    /// SPEC FR-11: the bridge on a real AppState with a fake engine and a fake
+    /// system, so the run never touches the real tile or media keys.
     @MainActor
     struct RemoteCommandTests {
         private final class StillNetwork: NetworkMonitoring {
@@ -44,51 +45,97 @@ extension SettingsTests {
             var onWake: (() -> Void)?
         }
 
-        private let engine = FakePlaybackEngine()
+        private final class FakeSystem: NowPlayingSystem {
+            private(set) var published: [(title: String?, state: MPNowPlayingPlaybackState)] = []
+            private(set) var send: ((NowPlayingBridge.Command) -> Void)?
 
-        private func makeBridge() -> (NowPlayingBridge, AppState) {
-            let appState = AppState(
+            func publish(_ info: [String: Any]?, state: MPNowPlayingPlaybackState) {
+                published.append((info?[MPMediaItemPropertyArtist] as? String, state))
+            }
+
+            func onCommand(_ handler: @escaping @MainActor (NowPlayingBridge.Command) -> Void) {
+                send = handler
+            }
+        }
+
+        private let engine = FakePlaybackEngine()
+        private let system = FakeSystem()
+
+        private func makeAppState() -> AppState {
+            AppState(
                 player: RadioPlayer(engine: engine),
                 networkMonitor: StillNetwork(),
                 sleepWatcher: NoSleep(),
                 defaults: TestDefaults.fresh(),
                 playlistResolver: .offline
             )
-            return (NowPlayingBridge(appState: appState), appState)
+        }
+
+        @Test func silentUntilTheRadioFirstPlays() async {
+            let appState = makeAppState()
+            let bridge = NowPlayingBridge(appState: appState, system: system)
+            await settle()
+            #expect(system.published.isEmpty, "F8 must stay with Music until the radio is used")
+            appState.togglePlayback()
+            await settle { !system.published.isEmpty }
+            #expect(system.published.last?.state == .playing)
+            appState.togglePlayback()
+            await settle { system.published.last?.state == .paused }
+            #expect(system.published.last?.state == .paused, "idle after playing keeps the tile")
+            _ = bridge
         }
 
         @Test func playStartsAndPlayingTwiceDoesNotRestart() {
-            let (bridge, appState) = makeBridge()
-            bridge.perform(.play)
+            let appState = makeAppState()
+            let bridge = NowPlayingBridge(appState: appState, system: system)
+            system.send?(.play)
             engine.send(.started)
-            bridge.perform(.play)
+            system.send?(.play)
             #expect(appState.player.state == .playing)
             #expect(engine.startedURLs.count == 1)
+            _ = bridge
         }
 
         @Test func pauseIsAFullStop() {
-            let (bridge, appState) = makeBridge()
-            bridge.perform(.play)
+            let appState = makeAppState()
+            let bridge = NowPlayingBridge(appState: appState, system: system)
+            system.send?(.play)
             engine.send(.started)
-            bridge.perform(.pause)
+            system.send?(.pause)
             #expect(appState.player.state == .idle)
-            bridge.perform(.pause)
+            system.send?(.stop)
             #expect(appState.player.state == .idle)
+            _ = bridge
         }
 
-        @Test func toggleFlipsAndF8DoesTheSame() {
-            let (bridge, appState) = makeBridge()
-            bridge.perform(.togglePlayPause)
+        @Test func toggleFlips() {
+            let appState = makeAppState()
+            let bridge = NowPlayingBridge(appState: appState, system: system)
+            system.send?(.togglePlayPause)
             #expect(appState.player.state == .connecting)
-            bridge.perform(.togglePlayPause)
+            system.send?(.togglePlayPause)
             #expect(appState.player.state == .idle)
+            _ = bridge
         }
 
-        @Test func everyCommandReportsSuccess() {
-            let (bridge, _) = makeBridge()
-            for command in [NowPlayingBridge.Command.play, .pause, .togglePlayPause, .stop] {
-                #expect(bridge.perform(command) == .success)
+        @Test func quittingClearsTheTile() {
+            let appState = makeAppState()
+            let bridge = NowPlayingBridge(appState: appState, system: system)
+            bridge.clear()
+            #expect(system.published.last?.title == nil)
+            #expect(system.published.last?.state == .stopped)
+        }
+
+        @Test func noLeftoversOnceTheBridgeIsGone() async {
+            weak var weakAppState: AppState?
+            do {
+                let appState = makeAppState()
+                weakAppState = appState
+                _ = NowPlayingBridge(appState: appState, system: system)
+                await settle()
             }
+            await settle { weakAppState == nil }
+            #expect(weakAppState == nil)
         }
     }
 }
