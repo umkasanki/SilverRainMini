@@ -8,11 +8,13 @@ import os
 final class StatusItemController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
+    private let appState: AppState
     private let openSettings: () -> Void
     private var panel: PanelWindow?
     private var outsideClickMonitor: Any?
 
-    init(openSettings: @escaping () -> Void) {
+    init(appState: AppState, openSettings: @escaping () -> Void) {
+        self.appState = appState
         self.openSettings = openSettings
         super.init()
         configureButton()
@@ -99,7 +101,10 @@ final class StatusItemController: NSObject {
     }
 
     private func makePanel() -> PanelWindow {
-        let panel = PanelWindow(rootView: PanelView(collapse: { [weak self] in self?.closePanel() }))
+        let panel = PanelWindow(rootView: PanelView(
+            appState: appState,
+            collapse: { [weak self] in self?.closePanel() }
+        ))
         panel.onCancel = { [weak self] in self?.closePanel() }
         return panel
     }

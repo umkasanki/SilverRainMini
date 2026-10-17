@@ -43,3 +43,21 @@ targets:
         PRODUCT_NAME: Silver Rain Mini
         PRODUCT_MODULE_NAME: SilverRainMini
         GENERATE_INFOPLIST_FILE: NO
+    scheme:
+      testTargets:
+        - SilverRainMiniTests
+
+  SilverRainMiniTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests
+    dependencies:
+      - target: SilverRainMini
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.oleg.SilverRainMiniTests
+        GENERATE_INFOPLIST_FILE: YES
+        # The product name has spaces, so the default derived from the target name misses.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Silver Rain Mini.app/Contents/MacOS/Silver Rain Mini"
+        BUNDLE_LOADER: $(TEST_HOST)

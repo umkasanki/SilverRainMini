@@ -5,7 +5,7 @@ DERIVED  := build/DerivedData
 PRODUCT  := $(DERIVED)/Build/Products/Release/$(APP_NAME).app
 APP      := build/$(APP_NAME).app
 
-.PHONY: app run install clean project
+.PHONY: app run test install clean project
 
 project:
 	xcodegen generate --quiet
@@ -15,6 +15,10 @@ app: project
 		-derivedDataPath $(DERIVED) -destination 'generic/platform=macOS' build -quiet
 	rm -rf "$(APP)"
 	ditto "$(PRODUCT)" "$(APP)"
+
+test: project
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -derivedDataPath $(DERIVED) \
+		-destination 'platform=macOS,arch=$(shell uname -m)' test -quiet
 
 run: app
 	-pkill -x "$(APP_NAME)"

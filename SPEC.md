@@ -28,7 +28,7 @@
 | Подпись | ad-hoc (`CODE_SIGN_IDENTITY = "-"`), без песочницы, без нотаризации |
 | Сеть | только HTTPS, исключений App Transport Security нет |
 | Язык интерфейса | русский, `developmentRegion = ru`; слова — из словаря самой macOS |
-| Логи | `os.Logger`, subsystem `local.oleg.SilverRainMini`, категории по модулям |
+| Логи | `os.Logger`, subsystem `local.oleg.SilverRainMini`, категории по модулям. Смены состояний и сбои — уровнем `notice`: `info` и `debug` macOS на диск не пишет, и после ночного прогона их не найти |
 | Тесты | Swift Testing (`import Testing`), `xcodebuild test` |
 
 Правила: HIG (macOS + Accessibility), Swift API Design Guidelines. Любое
@@ -87,8 +87,9 @@ enum PlaybackState: Equatable {
 }
 ```
 
-Переходы — строго по схеме PLAN 5; любой другой переход — ошибка программиста
-(`assertionFailure` в отладке, лог `fault` в релизе).
+Переходы — строго по схеме PLAN 5. Событие движка, которому в текущем состоянии
+нет перехода, игнорируется с записью в лог: запоздалое «звук пошёл» после `stop()` —
+штатная гонка, а не ошибка программиста.
 
 | Событие | Из | В |
 |---|---|---|
@@ -113,7 +114,7 @@ enum PlaybackState: Equatable {
 | Неустранимые → `error` | Устранимые → `reconnecting` |
 |---|---|
 | неверный URL, не-HTTPS адрес | нет сети, таймаут, обрыв соединения, DNS |
-| HTTP 4xx | HTTP 5xx |
+| HTTP 4xx (403 приходит как ошибка формата — тоже неустранимо) | HTTP 5xx |
 | формат не поддерживается `AVPlayer` | `AVPlayerItemPlaybackStalled` дольше 10 с |
 | | таймаут подключения (FR-4) |
 
@@ -297,9 +298,11 @@ SilverRainMini/
 │   │   ├── AppDelegate.swift           # старт: StatusItemController, playOnLaunch
 │   │   └── AppState.swift              # @Observable, связывает модули, единственный источник правды
 │   ├── Player/
-│   │   ├── PlaybackState.swift         # enum состояний и сбоев
+│   │   ├── PlaybackState.swift         # enum состояний
+│   │   ├── PlaybackFailure.swift       # сбои и их классификация по ошибкам AVPlayer
 │   │   ├── RadioPlayer.swift           # машина состояний поверх PlaybackEngine
-│   │   ├── PlaybackEngine.swift        # протокол + реализация на AVPlayer
+│   │   ├── PlaybackEngine.swift        # протокол движка
+│   │   ├── AVPlayerEngine.swift        # движок на AVPlayer
 │   │   ├── ReconnectPolicy.swift       # расписание повторов (чистая логика)
 │   │   ├── NetworkMonitor.swift        # NWPathMonitor
 │   │   └── SleepWatcher.swift          # сон и пробуждение
@@ -326,6 +329,8 @@ SilverRainMini/
 │   ├── Assets.xcassets                 # AppIcon, StationLogo (SVG, Preserve Vector Data)
 │   └── Info.plist                      # LSUIElement = YES
 └── Tests/
+    ├── FakePlaybackEngine.swift
+    ├── PlaybackFailureTests.swift
     ├── ReconnectPolicyTests.swift
     ├── StreamCatalogTests.swift
     ├── PlaylistResolverTests.swift
@@ -427,7 +432,9 @@ S6 = 7, S7 = 8, S8 = 9, S9 = 10–11. Шаг 6 PLAN (AirPlay) — этап 2.
   (пустой, без схемы, `http://`, корректный), битый JSON.
 - `PlaylistResolverTests`: обычный плейлист, `#EXTM3U` и комментарии, CRLF, пустой,
   без URL, замена `http` на `https`.
-- `RadioPlayerStateTests`: все переходы FR-4, классификация сбоев FR-5, переход
+- `PlaybackFailureTests`: классификация сбоев FR-5 на цепочках ошибок, снятых
+  с настоящего `AVPlayer` (404, 401, 403, 5xx, нет хоста, отказ в соединении, HTML).
+- `RadioPlayerStateTests`: все переходы FR-4, таймаут подключения, переход
   на аварийный путь после трёх неудач и возврат к основному на следующем `play()`.
 
 ### Ручной чек-лист

@@ -5,10 +5,11 @@ import os
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController?
     private let settingsOpener = SettingsOpener()
+    private let appState = AppState(player: RadioPlayer(engine: AVPlayerEngine()))
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let opener = settingsOpener
-        statusItemController = StatusItemController(openSettings: { opener.open() })
+        statusItemController = StatusItemController(appState: appState, openSettings: { opener.open() })
         Logger.app.info("Launched")
 
         #if DEBUG
@@ -17,7 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     #if DEBUG
-    /// Lets a check run without a mouse: `open … --args -SRMDebugAction settings`.
+    /// Lets a check run without a mouse: `open … --args -SRMDebugAction settings|panel|play`.
     private func performDebugAction() {
         guard let action = UserDefaults.standard.string(forKey: "SRMDebugAction") else { return }
         // The status item gets its place in the menu bar only after launch.
@@ -27,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             switch action {
             case "settings": settingsOpener.open()
             case "panel": statusItemController?.togglePanel()
+            case "play": appState.togglePlayback()
             default: break
             }
         }
