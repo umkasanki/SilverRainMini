@@ -15,7 +15,9 @@ protocol PlaybackEngine: AnyObject {
 }
 
 enum PlaybackEngineEvent: Equatable, Sendable {
-    /// Sound is coming out.
+    /// Sound is coming out, for the first time or again after a stall.
     case started
+    /// Sound was coming out and has stopped while the player waits for data.
+    case stalled
     case failed(PlaybackFailure)
 }

@@ -6,6 +6,8 @@ enum PlaybackFailure: Error, Equatable, Sendable {
     case unreachable
     /// No sound within the connect timeout.
     case connectTimeout
+    /// The sound stopped mid-stream and did not come back in time.
+    case stalled
     /// The address is malformed or not HTTPS.
     case invalidAddress
     /// HTTP 404.
@@ -18,7 +20,7 @@ enum PlaybackFailure: Error, Equatable, Sendable {
     /// Whether trying again later may help.
     var isRecoverable: Bool {
         switch self {
-        case .unreachable, .connectTimeout: true
+        case .unreachable, .connectTimeout, .stalled: true
         case .invalidAddress, .notFound, .refused, .unsupportedFormat: false
         }
     }

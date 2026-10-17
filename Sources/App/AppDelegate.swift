@@ -5,7 +5,24 @@ import os
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController?
     private let settingsOpener = SettingsOpener()
-    private let appState = AppState(player: RadioPlayer(engine: AVPlayerEngine()))
+    private let appState = AppState(
+        player: RadioPlayer(engine: AVPlayerEngine()),
+        networkMonitor: NetworkMonitor(),
+        sleepWatcher: SleepWatcher(),
+        streamURL: AppDelegate.streamURL
+    )
+
+    /// In debug builds `-SRMDebugStreamURL <address>` stands in for the stream,
+    /// e.g. a dead one to see the emergency path at work.
+    private static var streamURL: URL {
+        #if DEBUG
+        if let address = UserDefaults.standard.string(forKey: "SRMDebugStreamURL"),
+           let url = URL(string: address) {
+            return url
+        }
+        #endif
+        return AppState.defaultStreamURL
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let opener = settingsOpener

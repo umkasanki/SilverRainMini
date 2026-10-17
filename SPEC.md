@@ -115,7 +115,7 @@ enum PlaybackState: Equatable {
 |---|---|
 | неверный URL, не-HTTPS адрес | нет сети, таймаут, обрыв соединения, DNS |
 | HTTP 4xx (403 приходит как ошибка формата — тоже неустранимо) | HTTP 5xx |
-| формат не поддерживается `AVPlayer` | `AVPlayerItemPlaybackStalled` дольше 10 с |
+| формат не поддерживается `AVPlayer` | звук пропал посреди эфира (`timeControlStatus` ушёл в ожидание) и не вернулся за 10 с |
 | | таймаут подключения (FR-4) |
 
 **Расписание повторов** (`ReconnectPolicy`): 2, 5, 10, 30, 30, 30… с, без
@@ -330,11 +330,13 @@ SilverRainMini/
 │   └── Info.plist                      # LSUIElement = YES
 └── Tests/
     ├── FakePlaybackEngine.swift
+    ├── ManualClock.swift               # сны, которые кончаются, когда скажет тест
     ├── PlaybackFailureTests.swift
     ├── ReconnectPolicyTests.swift
     ├── StreamCatalogTests.swift
     ├── PlaylistResolverTests.swift
-    └── RadioPlayerStateTests.swift
+    ├── RadioPlayerStateTests.swift
+    └── RadioPlayerReconnectTests.swift
 ```
 
 Файлы этапа 2 (`AirPlayButton.swift`, `SleepGuard.swift`, плавающий виджет) в 1.0
@@ -434,8 +436,11 @@ S6 = 7, S7 = 8, S8 = 9, S9 = 10–11. Шаг 6 PLAN (AirPlay) — этап 2.
   без URL, замена `http` на `https`.
 - `PlaybackFailureTests`: классификация сбоев FR-5 на цепочках ошибок, снятых
   с настоящего `AVPlayer` (404, 401, 403, 5xx, нет хоста, отказ в соединении, HTML).
-- `RadioPlayerStateTests`: все переходы FR-4, таймаут подключения, переход
-  на аварийный путь после трёх неудач и возврат к основному на следующем `play()`.
+- `RadioPlayerStateTests`: все переходы FR-4, таймаут подключения.
+- `RadioPlayerReconnectTests`: расписание повторов и его сброс, мгновенный повтор
+  при возврате сети, застревание, аварийный путь после трёх неудач и сразу после
+  неустранимой, без него при лежащей сети, возврат к основному потоку на следующем
+  цикле и на следующем `play()`.
 
 ### Ручной чек-лист
 - [ ] Значка в Доке нет; значок в панели во всех четырёх видах

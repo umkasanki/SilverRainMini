@@ -58,6 +58,7 @@ struct PanelView: View {
         switch appState.player.state {
         case .idle: "AAC 96"
         case .connecting: "Подключение…"
+        case .playing where appState.player.isOnFallback: "В эфире · запасной поток"
         case .playing: "В эфире · AAC 96"
         case .reconnecting: "Переподключение…"
         case .error: "Не удалось подключиться"

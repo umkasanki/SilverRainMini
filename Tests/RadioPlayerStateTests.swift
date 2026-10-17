@@ -6,13 +6,10 @@ import Testing
 struct RadioPlayerStateTests {
     private let url = URL(string: "https://example.com/live.aac")!
     private let engine = FakePlaybackEngine()
+    private let clock = ManualClock()
 
-    /// A player whose connect timeout never fires unless a test wants it to.
-    private static let instantSleep: RadioPlayer.Sleep = { _ in }
-    private static let endlessSleep: RadioPlayer.Sleep = { _ in try await Task.sleep(for: .seconds(3600)) }
-
-    private func makePlayer(timeoutFiresAtOnce: Bool = false) -> RadioPlayer {
-        RadioPlayer(engine: engine, sleep: timeoutFiresAtOnce ? Self.instantSleep : Self.endlessSleep)
+    private func makePlayer() -> RadioPlayer {
+        RadioPlayer(engine: engine, sleep: clock.sleep)
     }
 
     private func playing(_ player: RadioPlayer) -> RadioPlayer {
@@ -116,24 +113,21 @@ struct RadioPlayerStateTests {
     // MARK: - Connect timeout
 
     @Test func silenceTooLongIsARecoverableTimeout() async {
-        let player = makePlayer(timeoutFiresAtOnce: true)
+        let player = makePlayer()
         player.play(url)
+        await settle { clock.pending == [.seconds(15)] }
+        clock.fire(.seconds(15))
         await settle { player.state != .connecting }
         #expect(player.state == .reconnecting(attempt: 1))
     }
 
     @Test func soundInTimeCancelsTheTimeout() async {
-        let player = makePlayer(timeoutFiresAtOnce: true)
+        let player = makePlayer()
         player.play(url)
+        await settle { clock.pending == [.seconds(15)] }
         engine.send(.started)
-        await settle { false }
+        await settle { clock.pending.isEmpty }
+        #expect(clock.pending.isEmpty)
         #expect(player.state == .playing)
-    }
-
-    /// Lets pending tasks run until `condition` holds or they have had plenty of turns.
-    private func settle(until condition: () -> Bool) async {
-        for _ in 0..<100 where !condition() {
-            await Task.yield()
-        }
     }
 }

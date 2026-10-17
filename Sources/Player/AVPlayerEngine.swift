@@ -10,6 +10,9 @@ final class AVPlayerEngine: PlaybackEngine {
     private let player = AVPlayer()
     private var observations: [NSKeyValueObservation] = []
     private var failureObserver: (any NSObjectProtocol)?
+    /// Whether the current stream has made any sound yet: waiting before that is
+    /// connecting, waiting after it is a stall.
+    private var hasStarted = false
 
     /// Enough to ride out a short network hiccup without a long delay to the live edge.
     private static let forwardBufferDuration: TimeInterval = 5
@@ -20,6 +23,7 @@ final class AVPlayerEngine: PlaybackEngine {
 
     func start(url: URL) {
         stop()
+        hasStarted = false
         let item = AVPlayerItem(url: url)
         item.preferredForwardBufferDuration = Self.forwardBufferDuration
         observe(item)
@@ -45,8 +49,8 @@ final class AVPlayerEngine: PlaybackEngine {
         let itemID = ObjectIdentifier(item)
         observations = [
             player.observe(\.timeControlStatus) { [weak self] player, _ in
-                guard player.timeControlStatus == .playing else { return }
-                Task { @MainActor in self?.report(.started, for: itemID) }
+                let status = player.timeControlStatus
+                Task { @MainActor in self?.timeControlStatusChanged(to: status, for: itemID) }
             },
             item.observe(\.status) { [weak self] item, _ in
                 guard item.status == .failed, let error = item.error else { return }
@@ -59,6 +63,18 @@ final class AVPlayerEngine: PlaybackEngine {
         ) { [weak self] notification in
             let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? any Error
             Task { @MainActor in self?.report(error, for: itemID) }
+        }
+    }
+
+    private func timeControlStatusChanged(to status: AVPlayer.TimeControlStatus, for itemID: ObjectIdentifier) {
+        switch status {
+        case .playing:
+            hasStarted = true
+            report(.started, for: itemID)
+        case .waitingToPlayAtSpecifiedRate where hasStarted:
+            report(.stalled, for: itemID)
+        default:
+            break
         }
     }
 

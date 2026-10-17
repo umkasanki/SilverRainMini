@@ -6,4 +6,5 @@ extension Logger {
     static let app = Logger(subsystem: subsystem, category: "App")
     static let menuBar = Logger(subsystem: subsystem, category: "MenuBar")
     static let player = Logger(subsystem: subsystem, category: "Player")
+    static let system = Logger(subsystem: subsystem, category: "System")
 }
