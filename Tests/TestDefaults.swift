@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+@testable import SilverRainMini
 
 /// Every suite that touches settings lives inside this one, and it runs them one
 /// at a time, awaits included. That is what makes sharing one preferences file
@@ -18,5 +19,14 @@ enum TestDefaults {
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         return defaults
+    }
+}
+
+extension PlaylistResolver {
+    /// The emergency path without the network: tests must never reach silver.ru.
+    static var offline: PlaylistResolver {
+        var resolver = PlaylistResolver()
+        resolver.fetch = { _ in throw URLError(.notConnectedToInternet) }
+        return resolver
     }
 }

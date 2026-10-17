@@ -90,7 +90,7 @@ struct PanelView: View {
             Text("Звук")
                 .font(.system(size: 12, weight: .semibold))
             VolumeSlider(
-                volume: appState.volume,
+                volume: appState.audibleVolume,
                 isMuted: appState.isMuted,
                 setVolume: { appState.setVolume($0, persist: $1) },
                 adjustVolume: { appState.adjustVolume(by: $0) },

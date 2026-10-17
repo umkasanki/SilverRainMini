@@ -30,6 +30,7 @@ extension SettingsTests {
                 networkMonitor: StillNetwork(),
                 sleepWatcher: sleepWatcher,
                 defaults: defaults,
+                playlistResolver: .offline,
                 sleep: clock.sleep
             )
         }
@@ -119,6 +120,50 @@ extension SettingsTests {
             await advance(3)
             #expect(engine.volume == 0)
             #expect(clock.pending.filter { $0 == step }.isEmpty)
+        }
+
+        @Test func aDropoutPausesTheFadeInsteadOfUsingItUp() async {
+            let appState = makeAppState()
+            appState.playOnLaunch()
+            engine.send(.started)
+            await advance(10)
+            let before = engine.volume
+            engine.send(.failed(.unreachable))
+            await settle()
+            // Silence: the clock moves on, the fade does not.
+            clock.fire(step)
+            await settle()
+            #expect(engine.volume == before)
+            // Sound is back: the fade carries on from where it was.
+            clock.fire(.seconds(2))
+            await settle { engine.startedURLs.count == 2 }
+            engine.send(.started)
+            await advance(1)
+            #expect(engine.volume > before && engine.volume < 0.8)
+            await advance(AppState.fadeInSteps - 11)
+            #expect(abs(engine.volume - 0.8) < 0.0001)
+            _ = appState
+        }
+
+        @Test func theSliderShowsWhatIsHeard() async {
+            let appState = makeAppState()
+            appState.playOnLaunch()
+            #expect(appState.audibleVolume == 0)
+            engine.send(.started)
+            await advance(AppState.fadeInSteps / 2)
+            #expect(appState.audibleVolume > 0 && appState.audibleVolume < 0.8)
+            await advance(AppState.fadeInSteps / 2)
+            #expect(appState.audibleVolume == 0.8)
+            #expect(appState.fadeLevel == nil)
+        }
+
+        @Test func aFailedStartShowsTheSavedLevelAgain() async {
+            let appState = makeAppState()
+            appState.playOnLaunch()
+            engine.send(.failed(.notFound))
+            await settle()
+            #expect(appState.audibleVolume == 0.8)
+            #expect(engine.volume == 0.8)
         }
 
         @Test func wakingUpFadesInToo() async {

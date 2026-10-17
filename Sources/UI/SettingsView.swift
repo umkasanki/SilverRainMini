@@ -41,8 +41,8 @@ struct GeneralSettingsView: View {
                         .foregroundStyle(.red)
                 }
                 Toggle("Включать радио при запуске", isOn: $playsOnLaunch)
-                Toggle("Плавно включать звук при запуске", isOn: $fadesInOnLaunch)
-                    .disabled(!playsOnLaunch)
+                // Not tied to the switch above: waking the Mac starts the radio by itself too.
+                Toggle("Плавно включать звук, когда радио включается само", isOn: $fadesInOnLaunch)
             }
 
             Section("Поток") {

@@ -24,7 +24,8 @@ extension SettingsTests {
                 player: RadioPlayer(engine: engine),
                 networkMonitor: StillNetwork(),
                 sleepWatcher: NoSleep(),
-                defaults: defaults
+                defaults: defaults,
+                playlistResolver: .offline
             )
         }
 

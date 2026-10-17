@@ -15,10 +15,16 @@ final class AppState {
     private(set) var volume: Double
     /// Silences the app without forgetting `volume`; remembered too.
     private(set) var isMuted: Bool
+    /// The level actually heard while a fade-in runs, `nil` otherwise.
+    private(set) var fadeLevel: Double?
+
+    /// What the volume control shows: the real level, which during a fade-in is
+    /// not yet the saved one.
+    var audibleVolume: Double { fadeLevel ?? volume }
 
     @ObservationIgnored private let networkMonitor: any NetworkMonitoring
     @ObservationIgnored private let sleepWatcher: any SleepWatching
-    @ObservationIgnored private let playlistResolver = PlaylistResolver()
+    @ObservationIgnored private let playlistResolver: PlaylistResolver
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let catalog: StreamCatalog
     /// Debug builds may force a stream; see `AppDelegate`.
@@ -41,9 +47,11 @@ final class AppState {
         catalog: StreamCatalog = .bundled,
         defaults: UserDefaults = .standard,
         streamOverride: URL? = nil,
+        playlistResolver: PlaylistResolver = PlaylistResolver(),
         sleep: @escaping RadioPlayer.Sleep = { try await Task.sleep(for: $0) }
     ) {
         self.sleep = sleep
+        self.playlistResolver = playlistResolver
         self.player = player
         self.networkMonitor = networkMonitor
         self.sleepWatcher = sleepWatcher
@@ -205,34 +213,55 @@ final class AppState {
 
     // MARK: - Fade-in
 
-    /// Silences the app and, once sound actually comes, raises the volume to the
-    /// saved level along a curve that sounds even: slow at first, then faster.
-    /// The wait for sound matters: a fade spent on connecting would be wasted.
+    /// Silences the app and raises the volume to the saved level along a curve
+    /// that sounds even: slow at first, then faster. Only time with sound counts:
+    /// the fade waits while connecting and pauses through a dropout, so it is never
+    /// used up in silence and the sound never comes back at full volume.
     private func startFadeIn() {
         cancelFadeIn()
         guard !isMuted else { return }
-        let target = Float(volume)
+        let target = volume
         let player = self.player
         let sleep = self.sleep
-        player.volume = 0
+        setFadeLevel(0)
         fadeTask = Task { [weak self] in
-            for await state in Observations({ player.state }) {
-                if state == .playing { break }
-                // Stopped or failed: whoever stopped it puts the volume back.
-                if !state.isActive { return }
-            }
-            for step in 1...Self.fadeInSteps {
+            var step = 1
+            while step <= Self.fadeInSteps {
+                guard await Self.soundIsComing(from: player) else {
+                    // Stopped or failed for good: nothing left to fade.
+                    self?.cancelFadeIn()
+                    return
+                }
                 do {
                     try await sleep(Self.fadeInDuration / Self.fadeInSteps)
                 } catch {
                     return
                 }
                 guard !Task.isCancelled else { return }
-                let progress = Float(step) / Float(Self.fadeInSteps)
-                player.volume = target * progress * progress
+                // The sound may have dropped while this step was waiting.
+                guard player.state == .playing else { continue }
+                let progress = Double(step) / Double(Self.fadeInSteps)
+                self?.setFadeLevel(target * progress * progress)
+                step += 1
             }
             self?.fadeTask = nil
+            self?.fadeLevel = nil
         }
+    }
+
+    /// Waits while the player is connecting or reconnecting. True once sound
+    /// plays; false if the player stopped or failed for good.
+    private static func soundIsComing(from player: RadioPlayer) async -> Bool {
+        for await state in Observations({ player.state }) {
+            if state == .playing { return true }
+            if !state.isActive { return false }
+        }
+        return false
+    }
+
+    private func setFadeLevel(_ level: Double) {
+        fadeLevel = level
+        player.volume = Float(level)
     }
 
     /// Stops a fade-in under way and puts the real volume back at once.
@@ -240,6 +269,7 @@ final class AppState {
         guard let fadeTask else { return }
         fadeTask.cancel()
         self.fadeTask = nil
+        fadeLevel = nil
         applyVolume()
     }
 

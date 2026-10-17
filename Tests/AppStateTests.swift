@@ -31,7 +31,8 @@ extension SettingsTests {
                 player: RadioPlayer(engine: engine, sleep: clock.sleep),
                 networkMonitor: network,
                 sleepWatcher: sleep,
-                defaults: TestDefaults.fresh()
+                defaults: TestDefaults.fresh(),
+                playlistResolver: .offline
             )
         }
 
