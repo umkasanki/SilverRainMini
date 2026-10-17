@@ -6,6 +6,8 @@ struct StreamProbe: Sendable {
     enum Outcome: Equatable, Sendable {
         /// «AAC · 96 kbps».
         case stream(String)
+        /// The server answered in a way the check cannot read, though it may well play.
+        case inconclusive(String)
         case failure(String)
     }
 
@@ -29,7 +31,19 @@ struct StreamProbe: Sendable {
                 bitrate: http.value(forHTTPHeaderField: "icy-br")
             )
         } catch {
-            return .failure("Не удалось подключиться")
+            return Self.outcome(for: error)
+        }
+    }
+
+    /// Old SHOUTcast servers answer `ICY 200 OK` instead of an HTTP status line.
+    /// URLSession cannot read that, but `AVPlayer` plays such streams, so the check
+    /// says it does not know rather than that the address is dead.
+    static func outcome(for error: any Error) -> Outcome {
+        switch (error as? URLError)?.code {
+        case .cannotParseResponse?, .badServerResponse?:
+            .inconclusive("Сервер старого типа: проверить нельзя, попробуйте включить")
+        default:
+            .failure("Не удалось подключиться")
         }
     }
 

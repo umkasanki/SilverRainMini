@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SilverRainMini
 
@@ -14,6 +15,19 @@ struct StreamProbeTests {
     ])
     func describesTheHeaders(contentType: String?, bitrate: String?, expected: StreamProbe.Outcome) {
         #expect(StreamProbe.describe(contentType: contentType, bitrate: bitrate) == expected)
+    }
+
+    @Test(arguments: [URLError.Code.cannotParseResponse, .badServerResponse])
+    func oldServersAreInconclusiveNotDead(code: URLError.Code) {
+        guard case .inconclusive = StreamProbe.outcome(for: URLError(code)) else {
+            Issue.record("expected an inconclusive answer for \(code)")
+            return
+        }
+    }
+
+    @Test(arguments: [URLError.Code.cannotFindHost, .timedOut, .notConnectedToInternet])
+    func realFailuresStayFailures(code: URLError.Code) {
+        #expect(StreamProbe.outcome(for: URLError(code)) == .failure("Не удалось подключиться"))
     }
 
     @Test func refusesPlainHTTPWithoutAsking() async {

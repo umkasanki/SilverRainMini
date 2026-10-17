@@ -41,6 +41,7 @@ final class AppState {
         self.catalog = catalog
         self.defaults = defaults
         self.streamOverride = streamOverride
+        Self.forgetUnknownStream(in: catalog, defaults: defaults)
         stream = Self.stream(in: catalog, defaults: defaults, override: streamOverride)
         volume = (defaults.object(forKey: SettingsKey.volume) as? Double).map { min(max($0, 0), 1) } ?? 1
         isMuted = defaults.bool(forKey: SettingsKey.isMuted)
@@ -56,6 +57,12 @@ final class AppState {
             forName: UserDefaults.didChangeNotification, object: defaults, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.settingsChanged() }
+        }
+    }
+
+    isolated deinit {
+        if let settingsObserver {
+            NotificationCenter.default.removeObserver(settingsObserver)
         }
     }
 
@@ -89,6 +96,16 @@ final class AppState {
             player.stop()
             play()
         }
+    }
+
+    /// A stream dropped from a later `streams.json` would leave Settings with nothing
+    /// selected while the default plays; the saved choice is moved to the default.
+    private static func forgetUnknownStream(in catalog: StreamCatalog, defaults: UserDefaults) {
+        guard let saved = defaults.string(forKey: SettingsKey.streamID),
+              saved != StreamCatalog.customID,
+              !catalog.streams.contains(where: { $0.id == saved })
+        else { return }
+        defaults.set(catalog.defaultStream.id, forKey: SettingsKey.streamID)
     }
 
     private static func stream(in catalog: StreamCatalog, defaults: UserDefaults, override: URL?) -> PlayableStream {

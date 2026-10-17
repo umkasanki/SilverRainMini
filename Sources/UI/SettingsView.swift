@@ -9,10 +9,14 @@ struct GeneralSettingsView: View {
     @AppStorage(SettingsKey.showQuality) private var showsQuality = false
     @AppStorage(SettingsKey.panelSurface) private var surface = PanelSurface.default
 
-    /// The address as typed. It is saved on Return or «Проверить», not on every key:
-    /// while the custom stream plays, each save switches to the new address.
+    /// The address as typed. It is saved on Return, «Проверить», leaving the field
+    /// or closing the pane, not on every key: while the custom stream plays, each
+    /// save switches to the new address.
     @State private var draftAddress = ""
-    @State private var probeOutcome: StreamProbe.Outcome?
+    @FocusState private var isEditingAddress: Bool
+    /// The last check and the address it was about, so a slow answer about an
+    /// address since edited is never shown.
+    @State private var probe: (address: String, outcome: StreamProbe.Outcome)?
     @State private var isProbing = false
 
     private let catalog = StreamCatalog.bundled
@@ -49,25 +53,31 @@ struct GeneralSettingsView: View {
         .formStyle(.grouped)
         .settingsPane()
         .onAppear { draftAddress = customURL }
+        .onDisappear(perform: saveAddress)
     }
 
     private var customAddress: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 TextField("Адрес", text: $draftAddress, prompt: Text("https://…"))
+                    .focused($isEditingAddress)
                     .onSubmit(saveAddress)
                 Button("Проверить") {
                     saveAddress()
-                    probe()
+                    check()
                 }
                 .disabled(isProbing)
             }
             if isProbing {
                 Text("Проверяю…").font(.callout).foregroundStyle(.secondary)
-            } else if let probeOutcome {
-                switch probeOutcome {
+            } else if let probe, probe.address == draftAddress {
+                switch probe.outcome {
                 case .stream(let description):
                     Label(description, systemImage: "checkmark.circle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                case .inconclusive(let message):
+                    Label(message, systemImage: "questionmark.circle")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 case .failure(let message):
@@ -77,19 +87,27 @@ struct GeneralSettingsView: View {
                 }
             }
         }
+        .onChange(of: isEditingAddress) { _, isEditing in
+            if !isEditing { saveAddress() }
+        }
+        // Choosing another stream hides the field; what was typed is kept.
+        .onDisappear(perform: saveAddress)
     }
 
+    /// Writes only a real change: an unchanged save must not restart the stream.
     private func saveAddress() {
-        customURL = draftAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        let address = draftAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        if address != customURL {
+            customURL = address
+        }
     }
 
-    private func probe() {
+    private func check() {
         isProbing = true
-        probeOutcome = nil
         let address = draftAddress
         Task {
             let outcome = await StreamProbe().probe(address)
-            probeOutcome = outcome
+            probe = (address, outcome)
             isProbing = false
         }
     }
