@@ -33,7 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItemController = StatusItemController(appState: appState, openSettings: { opener.open() })
         Logger.app.info("Launched")
         if appState.playsOnLaunch {
-            appState.togglePlayback()
+            appState.playOnLaunch()
         }
 
         #if DEBUG

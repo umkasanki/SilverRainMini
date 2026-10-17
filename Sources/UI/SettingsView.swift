@@ -4,6 +4,7 @@ import SwiftUI
 /// looks like System Settings.
 struct GeneralSettingsView: View {
     @AppStorage(SettingsKey.playOnLaunch) private var playsOnLaunch = true
+    @AppStorage(SettingsKey.fadeInOnLaunch) private var fadesInOnLaunch = false
     @AppStorage(SettingsKey.streamID) private var streamID = StreamCatalog.bundled.defaultStream.id
     @AppStorage(SettingsKey.customURL) private var customURL = ""
     @AppStorage(SettingsKey.showQuality) private var showsQuality = false
@@ -40,6 +41,8 @@ struct GeneralSettingsView: View {
                         .foregroundStyle(.red)
                 }
                 Toggle("Включать радио при запуске", isOn: $playsOnLaunch)
+                Toggle("Плавно включать звук при запуске", isOn: $fadesInOnLaunch)
+                    .disabled(!playsOnLaunch)
             }
 
             Section("Поток") {

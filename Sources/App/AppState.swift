@@ -26,6 +26,13 @@ final class AppState {
     @ObservationIgnored private var settingsObserver: (any NSObjectProtocol)?
     /// Whether the player was busy when the Mac went to sleep; lives in memory only.
     @ObservationIgnored private var wasActiveBeforeSleep = false
+    /// Waits out the fade-in steps; tests replace it.
+    @ObservationIgnored private let sleep: RadioPlayer.Sleep
+    @ObservationIgnored private var fadeTask: Task<Void, Never>?
+
+    /// The fade-in after launch and wake (SPEC FR-8): five seconds in 50 steps.
+    static let fadeInDuration: Duration = .seconds(5)
+    static let fadeInSteps = 50
 
     init(
         player: RadioPlayer,
@@ -33,8 +40,10 @@ final class AppState {
         sleepWatcher: any SleepWatching,
         catalog: StreamCatalog = .bundled,
         defaults: UserDefaults = .standard,
-        streamOverride: URL? = nil
+        streamOverride: URL? = nil,
+        sleep: @escaping RadioPlayer.Sleep = { try await Task.sleep(for: $0) }
     ) {
+        self.sleep = sleep
         self.player = player
         self.networkMonitor = networkMonitor
         self.sleepWatcher = sleepWatcher
@@ -66,6 +75,11 @@ final class AppState {
         }
     }
 
+    /// The «Плавно включать звук при запуске» setting; off unless turned on (SPEC FR-10).
+    var fadesInOnLaunch: Bool {
+        defaults.bool(forKey: SettingsKey.fadeInOnLaunch)
+    }
+
     /// The «Включать радио при запуске» setting; on unless turned off (SPEC FR-10).
     var playsOnLaunch: Bool {
         // `bool(forKey:)` also understands "NO" from the command line, which `as? Bool` does not.
@@ -94,7 +108,7 @@ final class AppState {
         stream = latest
         if player.state.isActive {
             player.stop()
-            play()
+            play(fadingIn: false)
         }
     }
 
@@ -119,12 +133,19 @@ final class AppState {
     }
 
     /// ▶︎ or ⏸: starts the live stream, or stops whatever the player is doing.
+    /// A press is never faded in: the sound comes at once.
     func togglePlayback() {
         if player.state.isActive {
+            cancelFadeIn()
             player.stop()
         } else {
-            play()
+            play(fadingIn: false)
         }
+    }
+
+    /// The radio starting by itself when the app launches (SPEC FR-10).
+    func playOnLaunch() {
+        play(fadingIn: fadesInOnLaunch)
     }
 
     // MARK: - Volume
@@ -132,6 +153,7 @@ final class AppState {
     /// Any change of volume also lifts the mute (SPEC FR-8).
     /// - Parameter persist: False while a drag is still moving; the level is saved once, at the end.
     func setVolume(_ volume: Double, persist: Bool = true) {
+        cancelFadeIn()
         self.volume = min(max(volume, 0), 1)
         setMuted(false)
         if persist {
@@ -146,6 +168,7 @@ final class AppState {
     }
 
     func toggleMute() {
+        cancelFadeIn()
         setMuted(!isMuted)
         applyVolume()
     }
@@ -162,7 +185,12 @@ final class AppState {
 
     // MARK: - Playback
 
-    private func play() {
+    private func play(fadingIn: Bool) {
+        if fadingIn {
+            startFadeIn()
+        } else {
+            cancelFadeIn()
+        }
         guard let url = stream.url else {
             player.reject(.invalidAddress)
             return
@@ -175,18 +203,60 @@ final class AppState {
         player.play(url, fallback: fallback)
     }
 
+    // MARK: - Fade-in
+
+    /// Silences the app and, once sound actually comes, raises the volume to the
+    /// saved level along a curve that sounds even: slow at first, then faster.
+    /// The wait for sound matters: a fade spent on connecting would be wasted.
+    private func startFadeIn() {
+        cancelFadeIn()
+        guard !isMuted else { return }
+        let target = Float(volume)
+        let player = self.player
+        let sleep = self.sleep
+        player.volume = 0
+        fadeTask = Task { [weak self] in
+            for await state in Observations({ player.state }) {
+                if state == .playing { break }
+                // Stopped or failed: whoever stopped it puts the volume back.
+                if !state.isActive { return }
+            }
+            for step in 1...Self.fadeInSteps {
+                do {
+                    try await sleep(Self.fadeInDuration / Self.fadeInSteps)
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                let progress = Float(step) / Float(Self.fadeInSteps)
+                player.volume = target * progress * progress
+            }
+            self?.fadeTask = nil
+        }
+    }
+
+    /// Stops a fade-in under way and puts the real volume back at once.
+    private func cancelFadeIn() {
+        guard let fadeTask else { return }
+        fadeTask.cancel()
+        self.fadeTask = nil
+        applyVolume()
+    }
+
     // MARK: - Sleep
 
     private func prepareForSleep() {
         wasActiveBeforeSleep = player.state.isActive
         if wasActiveBeforeSleep {
+            cancelFadeIn()
             player.stop()
         }
     }
 
+    /// Waking up is the radio starting by itself too, so it fades in like a launch.
     private func resumeAfterSleep() {
         guard wasActiveBeforeSleep else { return }
         wasActiveBeforeSleep = false
-        play()
+        play(fadingIn: fadesInOnLaunch)
     }
 }
