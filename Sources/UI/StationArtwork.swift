@@ -31,11 +31,9 @@ struct StationArtwork: View {
             NSColor.white.set()
             rect.fill()
             let logo = NSImage(named: "StationLogo") ?? NSImage()
-            let logoSide = side * 0.72
-            logo.draw(in: NSRect(
-                x: (side - logoSide) / 2, y: (side - logoSide * 270 / 276) / 2,
-                width: logoSide, height: logoSide * 270 / 276
-            ))
+            let width = side * 0.72
+            let height = logo.size.width > 0 ? width * logo.size.height / logo.size.width : width
+            logo.draw(in: NSRect(x: (side - width) / 2, y: (side - height) / 2, width: width, height: height))
             return true
         }
     }

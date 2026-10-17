@@ -5,18 +5,23 @@ import SwiftUI
 /// with the speaker inside on the left. A deliberate departure from Control
 /// Centre's thin track: a 28-point target is three times easier to hit when the
 /// app is driven by head movement (PLAN 6.2). Do not "fix" it back without a talk.
+///
+/// The speaker owns the left end: a click there mutes. The volume scale starts
+/// right of it, so every level from 0 to 100 % is still one click away (NFR-4).
 struct VolumeSlider: View {
     let volume: Double
     let isMuted: Bool
-    let setVolume: (Double) -> Void
+    /// Sets an absolute level; `persist` is false while a drag is still moving.
+    let setVolume: (_ volume: Double, _ persist: Bool) -> Void
+    /// Moves the level relative to whatever it is now, for scrolling and keys.
+    let adjustVolume: (Double) -> Void
     let toggleMute: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
-    @State private var scrollMonitor = ScrollWheelMonitor()
 
     static let height: CGFloat = 28
-    /// Clicks this close to the left edge land on the speaker: mute, not volume.
-    private static let speakerZone: CGFloat = 30
+    /// The speaker's end of the capsule: a click here mutes.
+    static let speakerZone: CGFloat = 30
     /// What one arrow key press changes.
     private static let keyboardStep = 0.05
 
@@ -27,37 +32,30 @@ struct VolumeSlider: View {
                 Rectangle().fill(trackColor)
                 Rectangle()
                     .fill(fillColor.opacity(isMuted ? 0.45 : 1))
-                    .frame(width: width * volume)
+                    .frame(width: Self.fillWidth(volume: volume, width: width))
                 Image(systemName: speakerSymbol)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(glyphColor(onFill: width * volume > Self.speakerZone * 0.6))
+                    .foregroundStyle(glyphColor(onFill: volume > 0))
                     .frame(width: Self.speakerZone, height: Self.height)
             }
             .clipShape(.capsule)
             .contentShape(.capsule)
             .gesture(drag(width: width))
-            .onAppear {
-                scrollMonitor.onScroll = { points in setVolume(volume + points / width) }
-            }
-            .onChange(of: volume) {
-                scrollMonitor.onScroll = { points in setVolume(volume + points / width) }
+            .overlay {
+                ScrollCatcher { points in adjustVolume(points / max(width - Self.speakerZone, 1)) }
             }
         }
         .frame(height: Self.height)
-        .onContinuousHover { phase in
-            if case .active = phase { scrollMonitor.start() } else { scrollMonitor.stop() }
-        }
-        .onDisappear { scrollMonitor.stop() }
         .focusable()
         // The slider takes focus as soon as the panel opens, and the system ring
         // around it looked like a stray outline (17.10.2026). Arrows still work.
         .focusEffectDisabled()
         .onKeyPress(keys: [.leftArrow, .downArrow]) { _ in
-            setVolume(volume - Self.keyboardStep)
+            adjustVolume(-Self.keyboardStep)
             return .handled
         }
         .onKeyPress(keys: [.rightArrow, .upArrow]) { _ in
-            setVolume(volume + Self.keyboardStep)
+            adjustVolume(Self.keyboardStep)
             return .handled
         }
         .accessibilityElement(children: .ignore)
@@ -65,30 +63,54 @@ struct VolumeSlider: View {
         .accessibilityValue(isMuted ? "Без звука" : "\(Int((volume * 100).rounded())) %")
         .accessibilityAdjustableAction { direction in
             switch direction {
-            case .increment: setVolume(volume + Self.keyboardStep)
-            case .decrement: setVolume(volume - Self.keyboardStep)
+            case .increment: adjustVolume(Self.keyboardStep)
+            case .decrement: adjustVolume(-Self.keyboardStep)
             @unknown default: break
             }
         }
         .accessibilityAction(named: isMuted ? "Включить звук" : "Без звука", toggleMute)
     }
 
+    // MARK: - Geometry
+
+    /// The level a pointer at `x` asks for: 0 at the speaker's edge, 1 at the far end.
+    static func volume(atX x: CGFloat, width: CGFloat) -> Double {
+        let scale = max(width - speakerZone, 1)
+        return min(max(Double((x - speakerZone) / scale), 0), 1)
+    }
+
+    /// How far the fill reaches, so that its edge sits exactly where a click set it.
+    /// At zero there is no fill at all.
+    static func fillWidth(volume: Double, width: CGFloat) -> CGFloat {
+        guard volume > 0 else { return 0 }
+        return speakerZone + CGFloat(volume) * max(width - speakerZone, 0)
+    }
+
+    // MARK: - Pointer
+
     /// A press and release on the speaker toggles mute; anything else sets the
-    /// volume where the pointer is, whether clicked once or dragged.
+    /// volume where the pointer is, whether clicked once or dragged. The level is
+    /// saved when the pointer lets go, not on every step of a drag.
     private func drag(width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { drag in
                 guard !isSpeakerClick(drag) else { return }
-                setVolume(drag.location.x / width)
+                setVolume(Self.volume(atX: drag.location.x, width: width), false)
             }
             .onEnded { drag in
-                if isSpeakerClick(drag) { toggleMute() }
+                if isSpeakerClick(drag) {
+                    toggleMute()
+                } else {
+                    setVolume(Self.volume(atX: drag.location.x, width: width), true)
+                }
             }
     }
 
     private func isSpeakerClick(_ drag: DragGesture.Value) -> Bool {
         drag.startLocation.x < Self.speakerZone && abs(drag.translation.width) < 3
     }
+
+    // MARK: - Look
 
     private var speakerSymbol: String {
         if isMuted { return "speaker.slash.fill" }
@@ -117,34 +139,37 @@ struct VolumeSlider: View {
     }
 }
 
-/// Feeds scroll-wheel and trackpad movement to the slider while the pointer is over it.
-@MainActor
-final class ScrollWheelMonitor {
+/// Takes scroll-wheel and trackpad movement over the slider and nothing else.
+///
+/// The view claims hits only while a scroll event is being routed, so clicks and
+/// drags go straight through to the slider. Being an ordinary view, it stops
+/// receiving anything the moment its panel is hidden.
+private struct ScrollCatcher: NSViewRepresentable {
     /// Points of movement: positive is louder (up or right).
-    var onScroll: ((CGFloat) -> Void)?
-    private var monitor: Any?
+    let onScroll: (CGFloat) -> Void
 
-    func start() {
-        guard monitor == nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+    func makeNSView(context: Context) -> CatcherView {
+        CatcherView()
+    }
+
+    func updateNSView(_ view: CatcherView, context: Context) {
+        view.onScroll = onScroll
+    }
+
+    final class CatcherView: NSView {
+        var onScroll: ((CGFloat) -> Void)?
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            NSApp.currentEvent?.type == .scrollWheel ? super.hitTest(point) : nil
+        }
+
+        override func scrollWheel(with event: NSEvent) {
             let horizontal = abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY)
             var points = horizontal ? -event.scrollingDeltaX : event.scrollingDeltaY
             // Follow the finger, not the content: with natural scrolling the deltas are flipped.
             if event.isDirectionInvertedFromDevice { points = -points }
             if !event.hasPreciseScrollingDeltas { points *= 8 }
-            let handled = MainActor.assumeIsolated { () -> Bool in
-                guard let onScroll = self?.onScroll else { return false }
-                onScroll(points)
-                return true
-            }
-            return handled ? nil : event
+            onScroll?(points)
         }
-    }
-
-    func stop() {
-        if let monitor {
-            NSEvent.removeMonitor(monitor)
-        }
-        monitor = nil
     }
 }

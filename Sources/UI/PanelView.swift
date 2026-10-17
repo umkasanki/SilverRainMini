@@ -51,7 +51,8 @@ struct PanelView: View {
             VolumeSlider(
                 volume: appState.volume,
                 isMuted: appState.isMuted,
-                setVolume: appState.setVolume,
+                setVolume: { appState.setVolume($0, persist: $1) },
+                adjustVolume: { appState.adjustVolume(by: $0) },
                 toggleMute: appState.toggleMute
             )
         }

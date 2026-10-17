@@ -19,6 +19,18 @@ struct MenuBarIconTests {
         #expect(MenuBarIcon.image(for: state).size == MenuBarIcon.size)
     }
 
+    @Test func thePulseCarriesOnAcrossReconnectAttempts() {
+        let button = NSStatusBarButton(frame: NSRect(x: 0, y: 0, width: 24, height: 24))
+        MenuBarIcon.apply(.connecting, to: button)
+        let pulse = button.layer?.animation(forKey: "pulse")
+        #expect(pulse != nil)
+        MenuBarIcon.apply(.reconnecting(attempt: 1), to: button)
+        MenuBarIcon.apply(.reconnecting(attempt: 2), to: button)
+        #expect(button.layer?.animation(forKey: "pulse") === pulse)
+        MenuBarIcon.apply(.playing, to: button)
+        #expect(button.layer?.animation(forKey: "pulse") == nil)
+    }
+
     @Test func theLogoForThePanelIsInTheBundle() {
         #expect(NSImage(named: "StationLogo") != nil)
     }

@@ -16,10 +16,10 @@ enum DebugIconRenderer {
                 appearance.performAsCurrentDrawingAppearance { png = snapshot(of: state, dark: name == .darkAqua) }
                 try? png?.write(to: folder.appending(path: "icon-\(stateName)-\(appearanceName).png"))
             }
-            let cover = StationArtwork.coverImage(side: 200)
-            try? bitmap(cover.size) { cover.draw(at: .zero, from: .zero, operation: .sourceOver, fraction: 1) }?
-                .write(to: folder.appending(path: "cover.png"))
         }
+        let cover = StationArtwork.coverImage(side: 200)
+        try? bitmap(cover.size) { cover.draw(at: .zero, from: .zero, operation: .sourceOver, fraction: 1) }?
+            .write(to: folder.appending(path: "cover.png"))
     }
 
     /// The icon at 4× on a strip coloured like the menu bar, as the menu bar would tint it.

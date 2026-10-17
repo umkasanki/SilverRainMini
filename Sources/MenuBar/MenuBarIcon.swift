@@ -40,11 +40,10 @@ enum MenuBarIcon {
 
     // MARK: - Images
 
-    private static var cloud: NSImage {
+    private static let cloud: NSImage =
         NSImage(systemSymbolName: "cloud.fill", accessibilityDescription: nil)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: pointSize, weight: .regular))
             ?? NSImage()
-    }
 
     private static var cloudRect: NSRect {
         NSRect(origin: NSPoint(x: margin, y: margin), size: cloud.size)
@@ -110,11 +109,17 @@ enum MenuBarIcon {
     // MARK: - Pulse and accessibility
 
     /// A soft opacity pulse while connecting; a steady half tone with Reduce Motion.
+    /// A pulse already running carries on, so each new reconnect attempt does not
+    /// snap it back to full opacity.
     private static func pulse(_ button: NSStatusBarButton, while state: PlaybackState) {
         button.wantsLayer = true
+        let shouldPulse = state == .connecting || state.reconnectAttempt > 0
+        if shouldPulse, button.layer?.animation(forKey: pulseKey) != nil {
+            return
+        }
         button.layer?.removeAnimation(forKey: pulseKey)
         button.alphaValue = 1
-        guard state == .connecting || state.reconnectAttempt > 0 else { return }
+        guard shouldPulse else { return }
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             button.alphaValue = 0.5
             return

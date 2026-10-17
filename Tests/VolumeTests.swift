@@ -18,10 +18,14 @@ struct VolumeTests {
     private let engine = FakePlaybackEngine()
     private let defaults: UserDefaults
 
+    /// One fixed preferences file for all runs, wiped at the start of each test.
+    /// A fresh name per test left a new file in ~/Library/Preferences every run.
+    /// The tests run on the main actor one at a time, so sharing it is safe.
+    private static let suite = "local.oleg.SilverRainMini.tests"
+
     init() {
-        let suite = "VolumeTests-\(UUID().uuidString)"
-        defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
+        defaults = UserDefaults(suiteName: Self.suite)!
+        defaults.removePersistentDomain(forName: Self.suite)
     }
 
     private func makeAppState() -> AppState {
@@ -72,6 +76,25 @@ struct VolumeTests {
         let relaunched = makeAppState()
         #expect(relaunched.isMuted)
         #expect(engine.volume == 0)
+    }
+
+    @Test func quickAdjustmentsAddUp() {
+        let appState = makeAppState()
+        appState.setVolume(0.5)
+        appState.adjustVolume(by: 0.05)
+        appState.adjustVolume(by: 0.05)
+        appState.adjustVolume(by: 0.05)
+        #expect(abs(appState.volume - 0.65) < 0.0001)
+    }
+
+    @Test func aDragIsSavedOnlyWhenItEnds() {
+        let appState = makeAppState()
+        appState.setVolume(0.2)
+        appState.setVolume(0.7, persist: false)
+        #expect(engine.volume == 0.7)
+        #expect(makeAppState().volume == 0.2)
+        appState.setVolume(0.7)
+        #expect(makeAppState().volume == 0.7)
     }
 
     @Test func anyVolumeChangeLiftsTheMute() {

@@ -63,18 +63,30 @@ final class AppState {
     // MARK: - Volume
 
     /// Any change of volume also lifts the mute (SPEC FR-8).
-    func setVolume(_ volume: Double) {
+    /// - Parameter persist: False while a drag is still moving; the level is saved once, at the end.
+    func setVolume(_ volume: Double, persist: Bool = true) {
         self.volume = min(max(volume, 0), 1)
-        isMuted = false
-        defaults.set(self.volume, forKey: SettingsKey.volume)
-        defaults.set(false, forKey: SettingsKey.isMuted)
+        setMuted(false)
+        if persist {
+            defaults.set(self.volume, forKey: SettingsKey.volume)
+        }
         applyVolume()
     }
 
+    /// Moves the level from wherever it is now, so quick scroll events add up.
+    func adjustVolume(by delta: Double) {
+        setVolume(volume + delta)
+    }
+
     func toggleMute() {
-        isMuted.toggle()
-        defaults.set(isMuted, forKey: SettingsKey.isMuted)
+        setMuted(!isMuted)
         applyVolume()
+    }
+
+    private func setMuted(_ isMuted: Bool) {
+        guard isMuted != self.isMuted else { return }
+        self.isMuted = isMuted
+        defaults.set(isMuted, forKey: SettingsKey.isMuted)
     }
 
     private func applyVolume() {
