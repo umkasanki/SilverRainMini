@@ -144,11 +144,22 @@ final class AppState {
     /// A press is never faded in: the sound comes at once.
     func togglePlayback() {
         if player.state.isActive {
-            cancelFadeIn()
-            player.stop()
+            stopPlayback()
         } else {
-            play(fadingIn: false)
+            startPlayback()
         }
+    }
+
+    /// Starts the live stream unless it is already on.
+    func startPlayback() {
+        guard !player.state.isActive else { return }
+        play(fadingIn: false)
+    }
+
+    /// Stops whatever the player is doing.
+    func stopPlayback() {
+        cancelFadeIn()
+        player.stop()
     }
 
     /// The radio starting by itself when the app launches (SPEC FR-10).

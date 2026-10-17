@@ -4,6 +4,7 @@ import os
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController?
+    private var nowPlaying: NowPlayingBridge?
     private let settingsOpener = SettingsOpener()
     private lazy var appState = AppState(
         player: RadioPlayer(engine: AVPlayerEngine()),
@@ -31,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !Self.isHostingTests else { return }
         let opener = settingsOpener
         statusItemController = StatusItemController(appState: appState, openSettings: { opener.open() })
+        nowPlaying = NowPlayingBridge(appState: appState)
         Logger.app.info("Launched")
         if appState.playsOnLaunch {
             appState.playOnLaunch()
@@ -39,6 +41,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         performDebugAction()
         #endif
+    }
+
+    /// «Выйти» (SPEC FR-12): stop, and take the tile out of Control Centre.
+    func applicationWillTerminate(_ notification: Notification) {
+        // Nothing was set up when hosting tests.
+        guard let nowPlaying else { return }
+        appState.stopPlayback()
+        nowPlaying.clear()
     }
 
     #if DEBUG
