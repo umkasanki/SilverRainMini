@@ -7,6 +7,11 @@ import os
 final class AVPlayerEngine: PlaybackEngine {
     var onEvent: ((PlaybackEngineEvent) -> Void)?
 
+    var volume: Float {
+        get { player.volume }
+        set { player.volume = newValue }
+    }
+
     private let player = AVPlayer()
     private var observations: [NSKeyValueObservation] = []
     private var failureObserver: (any NSObjectProtocol)?

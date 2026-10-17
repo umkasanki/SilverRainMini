@@ -21,6 +21,12 @@ final class RadioPlayer {
     /// Whether the sound comes from the emergency path rather than the chosen stream.
     private(set) var isOnFallback = false
 
+    /// The app's own volume, 0…1, passed straight to the engine.
+    var volume: Float {
+        get { engine.volume }
+        set { engine.volume = newValue }
+    }
+
     /// Kept up to date from `NetworkMonitor`. Its return cuts short the wait before the next attempt.
     var isNetworkAvailable = true {
         didSet {

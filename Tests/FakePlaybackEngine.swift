@@ -5,6 +5,7 @@ import Foundation
 @MainActor
 final class FakePlaybackEngine: PlaybackEngine {
     var onEvent: ((PlaybackEngineEvent) -> Void)?
+    var volume: Float = 1
     private(set) var startedURLs: [URL] = []
     private(set) var stopCount = 0
 

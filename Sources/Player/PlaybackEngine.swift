@@ -7,6 +7,9 @@ protocol PlaybackEngine: AnyObject {
     /// Reports what happened to the stream started last.
     var onEvent: ((PlaybackEngineEvent) -> Void)? { get set }
 
+    /// The app's own volume, 0…1; the system volume is left alone. Survives `start`.
+    var volume: Float { get set }
+
     /// Drops whatever was playing and starts `url` from the live edge.
     func start(url: URL)
 
