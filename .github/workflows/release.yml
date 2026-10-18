@@ -10,8 +10,9 @@ name: Release
 #   SIGNING_P12_BASE64, SIGNING_P12_PASSWORD — set by `tools/setup-signing.sh --secrets`.
 #     Required: the same identity as local builds is what keeps the login item and
 #     other grants across updates, so a release without it is refused, not shipped ad-hoc.
-#   TAP_TOKEN — a token with Contents: write on umkasanki/homebrew-tap (the default
-#     GITHUB_TOKEN cannot push to another repo). Without it the cask step is skipped.
+#   TAP_DEPLOY_KEY — the private half of a deploy key with write access to
+#     umkasanki/homebrew-tap (the default GITHUB_TOKEN cannot push to another repo).
+#     It reaches that one repo only and does not expire. Without it the cask step is skipped.
 #
 # Built the same way as on the Mac: `make dmg`, with the identity imported into the
 # keychain the Makefile looks in.
@@ -29,7 +30,7 @@ jobs:
     env:
       SIGNING_P12_BASE64: ${{ secrets.SIGNING_P12_BASE64 }}
       SIGNING_P12_PASSWORD: ${{ secrets.SIGNING_P12_PASSWORD }}
-      TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+      TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
       IDENTITY: SilverRainMini Self-Signed
     steps:
       - uses: actions/checkout@v5
@@ -103,11 +104,15 @@ jobs:
             "build/SilverRainMini-$V.dmg" "build/SilverRainMini-$V.zip"
 
       - name: Update Homebrew cask
-        if: env.TAP_TOKEN != ''
+        if: env.TAP_DEPLOY_KEY != ''
         run: |
           set -euo pipefail
           V=${{ steps.ver.outputs.version }}
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/umkasanki/homebrew-tap.git" "$RUNNER_TEMP/tap"
+          KEY="$RUNNER_TEMP/tap_key"
+          printf '%s\n' "$TAP_DEPLOY_KEY" > "$KEY"
+          chmod 600 "$KEY"
+          export GIT_SSH_COMMAND="ssh -i $KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git clone git@github.com:umkasanki/homebrew-tap.git "$RUNNER_TEMP/tap"
           CASK="$RUNNER_TEMP/tap/Casks/silver-rain-mini.rb"
           # The first release brings the cask into the tap from the template here.
           [ -f "$CASK" ] || cp packaging/homebrew/silver-rain-mini.rb "$CASK"
@@ -117,5 +122,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Casks/silver-rain-mini.rb
+          # A re-run of the same tag finds the cask already there.
+          if git diff --cached --quiet; then echo "The cask is already at $V"; exit 0; fi
           git commit -m "silver-rain-mini $V"
           git push
+          rm -f "$KEY"
