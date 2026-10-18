@@ -159,9 +159,12 @@ git tag v1.0.0 && git push origin v1.0.0
 - `SIGNING_P12_BASE64`, `SIGNING_P12_PASSWORD` — тот же сертификат, что и у локальных
   сборок: `tools/setup-signing.sh --secrets`. Без них релиз не выпускается — иначе
   обновление сбросило бы пользователям разрешения.
-- `TAP_DEPLOY_KEY` — закрытая часть ключа развёртывания с правом записи
-  в `homebrew-tap` (открытая добавлена в tap как deploy key). Без него релиз
-  выходит, а cask нужно обновить вручную по [шаблону](packaging/homebrew/silver-rain-mini.rb).
+- `TAP_TOKEN` — fine-grained токен с правом **Contents: write** только на `homebrew-tap`.
+- `TAP_DEPLOY_KEY` — запасной путь: закрытая часть ключа развёртывания с правом записи
+  в `homebrew-tap`. Используется, если токена нет, и не истекает.
+
+  Без обоих релиз выходит, а cask нужно обновить вручную по
+  [шаблону](packaging/homebrew/silver-rain-mini.rb).
 
 ## Обратная связь
 
