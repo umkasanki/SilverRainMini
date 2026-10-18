@@ -23,11 +23,15 @@ enum MenuBarIcon {
     private static let margin: CGFloat = 1.5
     private static let pulseKey = "pulse"
 
-    /// Applies the look for `state` to the status item's button.
-    static func apply(_ state: PlaybackState, to button: NSStatusBarButton) {
+    /// Applies the look for `state` to the status item's button. `reduceMotion` is the
+    /// system's «Уменьшить движение» unless a test says otherwise.
+    static func apply(
+        _ state: PlaybackState, to button: NSStatusBarButton,
+        reduceMotion: Bool = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    ) {
         button.image = image(for: state)
         button.setAccessibilityValue(accessibilityValue(for: state))
-        pulse(button, while: state)
+        pulse(button, while: state, reduceMotion: reduceMotion)
     }
 
     static func image(for state: PlaybackState) -> NSImage {
@@ -111,7 +115,7 @@ enum MenuBarIcon {
     /// A soft opacity pulse while connecting; a steady half tone with Reduce Motion.
     /// A pulse already running carries on, so each new reconnect attempt does not
     /// snap it back to full opacity.
-    private static func pulse(_ button: NSStatusBarButton, while state: PlaybackState) {
+    private static func pulse(_ button: NSStatusBarButton, while state: PlaybackState, reduceMotion: Bool) {
         button.wantsLayer = true
         let shouldPulse = state == .connecting || state.reconnectAttempt > 0
         if shouldPulse, button.layer?.animation(forKey: pulseKey) != nil {
@@ -120,7 +124,7 @@ enum MenuBarIcon {
         button.layer?.removeAnimation(forKey: pulseKey)
         button.alphaValue = 1
         guard shouldPulse else { return }
-        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+        if reduceMotion {
             button.alphaValue = 0.5
             return
         }
