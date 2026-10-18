@@ -26,7 +26,7 @@ struct NowPlayingBridgeTests {
 
     @Test func theCoverIsTheLogoAtFullSize() {
         let cover = StationArtwork.coverImage()
-        #expect(cover.size == CGSize(width: 600, height: 600))
+        #expect(cover.size == CGSize(width: 256, height: 256))
     }
 }
 

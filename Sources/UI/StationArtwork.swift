@@ -27,7 +27,9 @@ struct StationArtwork: View {
 
     /// The cover for Now Playing (SPEC FR-11): the logo on a light square.
     /// Callable from any thread: Now Playing asks for it off the main thread.
-    nonisolated static func coverImage(side: CGFloat = 600) -> NSImage {
+    /// 256 is sharp at the 128 pt Control Centre shows at most; the system keeps
+    /// processed copies of the cover, and at 600 they cost 53 MB (NFR-1).
+    nonisolated static func coverImage(side: CGFloat = 256) -> NSImage {
         NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
             NSColor.white.set()
             rect.fill()
