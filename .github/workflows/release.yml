@@ -1,0 +1,121 @@
+name: Release
+
+# Push a tag like v1.2.0 to cut a release:
+#   git tag v1.2.0 && git push origin v1.2.0
+# The job tests, builds and signs the app, packages a .dmg and a .zip, publishes a
+# GitHub Release with both, and puts the new version into the Homebrew cask in
+# umkasanki/homebrew-tap.
+#
+# Repo secrets (README, «Выпуск релиза»):
+#   SIGNING_P12_BASE64, SIGNING_P12_PASSWORD — set by `tools/setup-signing.sh --secrets`.
+#     Required: the same identity as local builds is what keeps the login item and
+#     other grants across updates, so a release without it is refused, not shipped ad-hoc.
+#   TAP_TOKEN — a token with Contents: write on umkasanki/homebrew-tap (the default
+#     GITHUB_TOKEN cannot push to another repo). Without it the cask step is skipped.
+#
+# Built the same way as on the Mac: `make dmg`, with the identity imported into the
+# keychain the Makefile looks in.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # GITHUB_TOKEN may create the release on this repo
+
+jobs:
+  release:
+    runs-on: macos-26   # the app needs the macOS 26 SDK
+    env:
+      SIGNING_P12_BASE64: ${{ secrets.SIGNING_P12_BASE64 }}
+      SIGNING_P12_PASSWORD: ${{ secrets.SIGNING_P12_PASSWORD }}
+      TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+      IDENTITY: SilverRainMini Self-Signed
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Derive version from tag
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Tools
+        run: |
+          brew install xcodegen
+          xcodebuild -version
+
+      - name: Test
+        run: make test
+
+      - name: Import signing identity
+        run: |
+          set -euo pipefail
+          if [ -z "$SIGNING_P12_BASE64" ]; then
+            echo "::error::SIGNING_P12_BASE64 is not set — run tools/setup-signing.sh --secrets"
+            exit 1
+          fi
+          # The keychain and password tools/setup-signing.sh uses, so `make` finds it.
+          KC="$HOME/Library/Keychains/silverrainmini.keychain-db"
+          security create-keychain -p silverrainmini "$KC"
+          security set-keychain-settings "$KC"          # no auto-lock
+          security unlock-keychain -p silverrainmini "$KC"
+          echo "$SIGNING_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security import "$RUNNER_TEMP/signing.p12" -k "$KC" -P "$SIGNING_P12_PASSWORD" -A -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/signing.p12"
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed 's/"//g')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k silverrainmini "$KC" >/dev/null
+          # Not `find-identity -v`: that keeps only trusted identities, and a
+          # self-signed one never is (AllyKeyboard learned it the hard way).
+          security find-identity "$KC" | grep -F "$IDENTITY"
+
+      - name: Build and package
+        env:
+          REQUIRE_IDENTITY: ${{ env.IDENTITY }}
+        run: make dmg VERSION=${{ steps.ver.outputs.version }}
+
+      - name: Compute SHA-256
+        id: sha
+        run: echo "sha=$(shasum -a 256 build/SilverRainMini-${{ steps.ver.outputs.version }}.dmg | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=${{ steps.ver.outputs.version }}
+          cat > "$RUNNER_TEMP/notes.md" <<'EOF'
+          Для macOS 26 и новее.
+
+          **Homebrew**
+          ```
+          brew tap umkasanki/tap
+          brew trust umkasanki/tap
+          brew install --cask silver-rain-mini
+          ```
+
+          **DMG.** Скачайте `SilverRainMini-<версия>.dmg`, откройте и перетащите приложение в «Программы».
+          Приложение подписано своим сертификатом, но не нотаризовано, поэтому при первом запуске
+          macOS спросит подтверждение (см. README). Обновление — та же установка поверх, настройки
+          и автозагрузка сохраняются.
+          EOF
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Silver Rain Mini $V" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            "build/SilverRainMini-$V.dmg" "build/SilverRainMini-$V.zip"
+
+      - name: Update Homebrew cask
+        if: env.TAP_TOKEN != ''
+        run: |
+          set -euo pipefail
+          V=${{ steps.ver.outputs.version }}
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/umkasanki/homebrew-tap.git" "$RUNNER_TEMP/tap"
+          CASK="$RUNNER_TEMP/tap/Casks/silver-rain-mini.rb"
+          # The first release brings the cask into the tap from the template here.
+          [ -f "$CASK" ] || cp packaging/homebrew/silver-rain-mini.rb "$CASK"
+          sed -i '' -E "s/^  version \".*\"/  version \"$V\"/" "$CASK"
+          sed -i '' -E "s/^  sha256 \".*\".*/  sha256 \"${{ steps.sha.outputs.sha }}\"/" "$CASK"
+          cd "$RUNNER_TEMP/tap"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/silver-rain-mini.rb
+          git commit -m "silver-rain-mini $V"
+          git push
