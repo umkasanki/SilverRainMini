@@ -15,14 +15,13 @@ cask "silver-rain-mini" do
   desc "Menu bar player for the Silver Rain radio station"
   homepage "https://github.com/umkasanki/SilverRainMini"
 
-  depends_on macos: ">= :tahoe"
+  depends_on macos: :tahoe
 
   app "Silver Rain Mini.app"
 
   # Self-signed, not notarized: without this Gatekeeper refuses the first launch.
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Silver Rain Mini.app"]
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/Silver Rain Mini.app"]
   end
 
   uninstall quit: "local.oleg.SilverRainMini"
