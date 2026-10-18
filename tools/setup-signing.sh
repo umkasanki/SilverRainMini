@@ -21,7 +21,8 @@ OPENSSL=/usr/bin/openssl   # LibreSSL: its .p12 is one `security import` reads
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-has_identity() { [ -f "$KC" ] && security find-identity "$KC" 2>/dev/null | grep -qF "$IDENTITY"; }
+# Not `| grep -q`: it quits early and, under pipefail, a found identity reads as missing.
+has_identity() { [ -f "$KC" ] && grep -qF "$IDENTITY" <<<"$(security find-identity "$KC" 2>/dev/null)"; }
 
 if has_identity; then
     echo "Identity '$IDENTITY' already exists — keeping it (a new one would reset the grants)."

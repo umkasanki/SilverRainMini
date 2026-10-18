@@ -16,9 +16,12 @@ VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/
 NAME="SilverRainMini-$VERSION"
 
 if [ -n "${REQUIRE_IDENTITY:-}" ]; then
-    codesign -dv --verbose=2 "$APP" 2>&1 | grep -qxF "Authority=$REQUIRE_IDENTITY" || {
+    # Into a variable first: `grep -q` in a pipe quits early, codesign gets SIGPIPE,
+    # and under pipefail a good signature would read as a bad one.
+    SIGNATURE="$(codesign -dv --verbose=2 "$APP" 2>&1)"
+    grep -qxF "Authority=$REQUIRE_IDENTITY" <<<"$SIGNATURE" || {
         echo "ERROR: $APP is not signed as '$REQUIRE_IDENTITY':" >&2
-        codesign -dv --verbose=2 "$APP" 2>&1 | grep -E '^(Authority|Signature)=' >&2 || true
+        grep -E '^(Authority|Signature)=' <<<"$SIGNATURE" >&2 || true
         exit 1
     }
 fi
