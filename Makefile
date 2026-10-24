@@ -2,9 +2,11 @@ PROJECT  := SilverRainMini.xcodeproj
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 SCHEME   := SilverRainMini
 APP_NAME := Silver Rain Mini
-DERIVED  := build/DerivedData
+# Builds live in folders ending in .noindex: Spotlight skips those, so the search
+# finds the installed app only, not one copy per build.
+DERIVED  := build/DerivedData.noindex
 PRODUCT  := $(DERIVED)/Build/Products/Release/$(APP_NAME).app
-APP      := build/$(APP_NAME).app
+APP      := build/app.noindex/$(APP_NAME).app
 
 # The stable identity from tools/setup-signing.sh when it exists, ad-hoc otherwise.
 # The same identity on every build keeps what macOS has granted the app.
@@ -26,8 +28,9 @@ app: project
 		-derivedDataPath $(DERIVED) -destination 'generic/platform=macOS' \
 		$(SIGNING) $(VERSIONING) build -quiet
 	rm -rf "$(APP)"
+	mkdir -p "$(dir $(APP))"
 	ditto "$(PRODUCT)" "$(APP)"
-	@codesign -dv "$(APP)" 2>&1 | grep -E '^(Authority|Signature)=' || true
+	@codesign -dv --verbose=2 "$(APP)" 2>&1 | grep -E '^(Authority|Signature)=' || true
 
 test: project
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -derivedDataPath $(DERIVED) \
@@ -48,7 +51,7 @@ install: app
 
 # A drag-to-Applications .dmg and a .zip in build/, for a release or by hand.
 dmg: app
-	tools/make-dmg.sh "$(APP)"
+	tools/make-dmg.sh "$(APP)" build
 
 clean:
 	rm -rf build $(PROJECT)

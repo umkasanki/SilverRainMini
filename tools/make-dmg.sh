@@ -3,15 +3,15 @@
 # and build/SilverRainMini-<version>.zip, and prints the SHA-256 the Homebrew cask needs.
 # Usually run as `make dmg`. Self-signed, not notarized: see README for first launch.
 #
-#   tools/make-dmg.sh "build/Silver Rain Mini.app"
+#   tools/make-dmg.sh "build/app.noindex/Silver Rain Mini.app" build
 #
 # REQUIRE_IDENTITY="SilverRainMini Self-Signed" refuses an app signed otherwise:
 # CI sets it, because a release quietly signed ad-hoc would cost every user
 # what macOS had granted the app (AllyKeyboard v1.2.0 shipped like that once).
 set -euo pipefail
 
-APP="${1:?usage: make-dmg.sh <path to .app>}"
-OUT="$(dirname "$APP")"
+APP="${1:?usage: make-dmg.sh <path to .app> [output folder]}"
+OUT="${2:-$(dirname "$APP")}"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
 NAME="SilverRainMini-$VERSION"
 

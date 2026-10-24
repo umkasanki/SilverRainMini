@@ -139,7 +139,7 @@ make install             # собрать, установить в /Applications
 
 | Команда | Что делает |
 |---|---|
-| `make app` | собирает `build/Silver Rain Mini.app` |
+| `make app` | собирает `build/app.noindex/Silver Rain Mini.app` (`.noindex` — чтобы Spotlight не находил копии сборок) |
 | `make run` | собирает и запускает |
 | `make install` | собирает и ставит в `/Applications` |
 | `make test` | автотесты |
