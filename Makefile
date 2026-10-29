@@ -6,7 +6,8 @@ APP_NAME := Silver Rain Mini
 # finds the installed app only, not one copy per build.
 DERIVED  := build/DerivedData.noindex
 PRODUCT  := $(DERIVED)/Build/Products/Release/$(APP_NAME).app
-APP      := build/app.noindex/$(APP_NAME).app
+APP_DIR  := build/app.noindex
+APP      := $(APP_DIR)/$(APP_NAME).app
 
 # The stable identity from tools/setup-signing.sh when it exists, ad-hoc otherwise.
 # The same identity on every build keeps what macOS has granted the app.
@@ -28,7 +29,7 @@ app: project
 		-derivedDataPath $(DERIVED) -destination 'generic/platform=macOS' \
 		$(SIGNING) $(VERSIONING) build -quiet
 	rm -rf "$(APP)"
-	mkdir -p "$(dir $(APP))"
+	mkdir -p "$(APP_DIR)"
 	ditto "$(PRODUCT)" "$(APP)"
 	@codesign -dv --verbose=2 "$(APP)" 2>&1 | grep -E '^(Authority|Signature)=' || true
 
