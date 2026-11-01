@@ -1,26 +1,21 @@
 import AppKit
 import SwiftUI
 
-/// The station's logo on a light, translucent tile (PLAN 6.2, the approved mockup).
-/// The tile is not decoration: without it the dark blue of the logo sinks in dark mode.
+/// The station's logo on a plain white tile, like the app icon and the Now Playing
+/// cover. It began translucent (PLAN 6.2, the approved mockup); the user asked for
+/// solid white on 01.11.2026. The tile is not decoration: without it the dark blue
+/// of the logo sinks in dark mode.
 struct StationArtwork: View {
-    @Environment(\.colorScheme) private var colorScheme
-
     private static let side: CGFloat = 46
     private static let cornerRadius: CGFloat = 11
 
     var body: some View {
-        let isDark = colorScheme == .dark
         Image("StationLogo")
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: 34, height: 33)
             .frame(width: Self.side, height: Self.side)
-            .background(.white.opacity(isDark ? 0.72 : 0.62), in: .rect(cornerRadius: Self.cornerRadius))
-            .overlay {
-                RoundedRectangle(cornerRadius: Self.cornerRadius)
-                    .strokeBorder(.white.opacity(isDark ? 0.35 : 0.65), lineWidth: 0.5)
-            }
+            .background(.white, in: .rect(cornerRadius: Self.cornerRadius))
             // The station's name stands right next to it.
             .accessibilityHidden(true)
     }
