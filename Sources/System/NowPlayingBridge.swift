@@ -20,14 +20,21 @@ final class NowPlayingBridge {
 
     private let appState: AppState
     private let system: any NowPlayingSystem
+    private let now: () -> ContinuousClock.Instant
     private var observation: Task<Void, Never>?
+    private var startPause = StartPauseGuard()
     /// Nothing is shown until the radio has played once: claimed at launch, the
     /// tile and F8 would be taken from Music before the user asked for the radio.
     private var hasPlayed = false
 
-    init(appState: AppState, system: any NowPlayingSystem = SystemNowPlaying()) {
+    init(
+        appState: AppState,
+        system: any NowPlayingSystem = SystemNowPlaying(),
+        now: @escaping () -> ContinuousClock.Instant = { .now }
+    ) {
         self.appState = appState
         self.system = system
+        self.now = now
         system.onCommand { [weak self] command in self?.perform(command) }
         observePlayer()
     }
@@ -76,6 +83,7 @@ final class NowPlayingBridge {
     }
 
     private func publish(state: PlaybackState, isOnFallback: Bool, streamTitle: String) {
+        startPause.note(state, at: now())
         if state.isActive {
             hasPlayed = true
         }
@@ -94,9 +102,57 @@ final class NowPlayingBridge {
         Logger.system.notice("Remote command: \(String(describing: command), privacy: .public)")
         switch command {
         case .play: appState.startPlayback()
-        case .pause, .stop: appState.stopPlayback()
+        case .pause:
+            if startPause.ignoresPause(at: now()) {
+                Logger.system.notice("Remote pause ignored: the first one right after a start")
+                return
+            }
+            appState.stopPlayback()
+        case .stop: appState.stopPlayback()
         case .togglePlayPause: appState.togglePlayback()
         }
+    }
+}
+
+/// Lets the first remote `pause` right after a start go.
+///
+/// A Sonos joined to the Mac both ways — Bluetooth as the system output, AirPlay
+/// for the radio through SoundSource — switches inputs when the radio's AirPlay
+/// stream reaches it after something played over Bluetooth, and tells the
+/// Bluetooth source to pause. The Mac cannot tell whom that was for and hands it
+/// to the app now playing: the radio stopped a few seconds into the sound, every
+/// time, and played on the second click (measured 01.11.2026: the pause came
+/// 2.5–3.2 s after the sound started). Apple Music routed the same way did the same.
+///
+/// Only `pause`, which is what Bluetooth sends; F8 and Control Centre send
+/// `togglePlayPause` and are never held back. Only the first one, only while
+/// connecting and for `window` after the sound starts.
+struct StartPauseGuard {
+    static let window: Duration = .seconds(5)
+
+    private var wasActive = false
+    private var armed = false
+    private var soundSince: ContinuousClock.Instant?
+
+    mutating func note(_ state: PlaybackState, at now: ContinuousClock.Instant) {
+        if state.isActive, !wasActive {
+            armed = true
+            soundSince = nil
+        }
+        if state == .playing, soundSince == nil {
+            soundSince = now
+        }
+        if !state.isActive {
+            armed = false
+        }
+        wasActive = state.isActive
+    }
+
+    mutating func ignoresPause(at now: ContinuousClock.Instant) -> Bool {
+        guard armed else { return false }
+        armed = false
+        guard let soundSince else { return true }
+        return now - soundSince <= Self.window
     }
 }
 

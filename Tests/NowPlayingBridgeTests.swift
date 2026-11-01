@@ -30,6 +30,66 @@ struct NowPlayingBridgeTests {
     }
 }
 
+/// The Sonos joined both ways sends `pause` a few seconds into the sound.
+struct StartPauseGuardTests {
+    private let start = ContinuousClock.now
+
+    @Test func theFirstPauseWhileConnectingIsLetGoAndTheNextCounts() {
+        var guardian = StartPauseGuard()
+        guardian.note(.idle, at: start)
+        guardian.note(.connecting, at: start)
+        let first = guardian.ignoresPause(at: start + .seconds(1))
+        #expect(first)
+        let second = guardian.ignoresPause(at: start + .seconds(2))
+        #expect(!second)
+    }
+
+    @Test func aPauseThreeSecondsIntoTheSoundIsLetGo() {
+        var guardian = StartPauseGuard()
+        guardian.note(.connecting, at: start)
+        guardian.note(.playing, at: start + .seconds(2))
+        let letGo = guardian.ignoresPause(at: start + .seconds(5))
+        #expect(letGo)
+    }
+
+    @Test func aPauseLaterThanTheWindowCounts() {
+        var guardian = StartPauseGuard()
+        guardian.note(.connecting, at: start)
+        guardian.note(.playing, at: start + .seconds(2))
+        let letGo = guardian.ignoresPause(at: start + .seconds(8))
+        #expect(!letGo)
+    }
+
+    @Test func aReconnectDoesNotArmItAgain() {
+        var guardian = StartPauseGuard()
+        guardian.note(.connecting, at: start)
+        guardian.note(.playing, at: start + .seconds(1))
+        guardian.note(.reconnecting(attempt: 1), at: start + .seconds(60))
+        guardian.note(.playing, at: start + .seconds(62))
+        let letGo = guardian.ignoresPause(at: start + .seconds(63))
+        #expect(!letGo)
+    }
+
+    @Test func eachNewStartArmsItAgain() {
+        var guardian = StartPauseGuard()
+        guardian.note(.connecting, at: start)
+        guardian.note(.playing, at: start + .seconds(1))
+        let first = guardian.ignoresPause(at: start + .seconds(3))
+        #expect(first)
+        guardian.note(.idle, at: start + .seconds(3))
+        guardian.note(.connecting, at: start + .seconds(10))
+        let second = guardian.ignoresPause(at: start + .seconds(11))
+        #expect(second)
+    }
+
+    @Test func nothingIsLetGoWhileIdle() {
+        var guardian = StartPauseGuard()
+        guardian.note(.idle, at: start)
+        let letGo = guardian.ignoresPause(at: start)
+        #expect(!letGo)
+    }
+}
+
 extension SettingsTests {
     /// SPEC FR-11: the bridge on a real AppState with a fake engine and a fake
     /// system, so the run never touches the real tile or media keys.
@@ -96,14 +156,48 @@ extension SettingsTests {
             _ = bridge
         }
 
-        @Test func pauseIsAFullStop() {
+        @Test func pauseIsAFullStop() async {
             let appState = makeAppState()
-            let bridge = NowPlayingBridge(appState: appState, system: system)
+            var instant = ContinuousClock.now
+            let bridge = NowPlayingBridge(appState: appState, system: system, now: { instant })
             system.send?(.play)
             engine.send(.started)
+            let onAir = NowPlayingCard.subtitle(
+                for: .playing, isOnFallback: false, streamTitle: appState.stream.shortTitle
+            )
+            await settle { system.published.last?.title == onAir }
+            instant += StartPauseGuard.window + .seconds(1)
             system.send?(.pause)
             #expect(appState.player.state == .idle)
             system.send?(.stop)
+            #expect(appState.player.state == .idle)
+            _ = bridge
+        }
+
+        @Test func thePauseASpeakerSendsRightAfterTheStartIsLetGo() async {
+            let appState = makeAppState()
+            var instant = ContinuousClock.now
+            let bridge = NowPlayingBridge(appState: appState, system: system, now: { instant })
+            appState.togglePlayback()
+            engine.send(.started)
+            let onAir = NowPlayingCard.subtitle(
+                for: .playing, isOnFallback: false, streamTitle: appState.stream.shortTitle
+            )
+            await settle { system.published.last?.title == onAir }
+            instant += .seconds(3)
+            system.send?(.pause)
+            #expect(appState.player.state == .playing, "the speaker's pause is let go")
+            system.send?(.pause)
+            #expect(appState.player.state == .idle, "the next one is the user's")
+            _ = bridge
+        }
+
+        @Test func toggleRightAfterTheStartIsNeverHeldBack() {
+            let appState = makeAppState()
+            let bridge = NowPlayingBridge(appState: appState, system: system)
+            system.send?(.togglePlayPause)
+            engine.send(.started)
+            system.send?(.togglePlayPause)
             #expect(appState.player.state == .idle)
             _ = bridge
         }
